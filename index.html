@@ -10,32 +10,34 @@
     margin: 0;
     background: black;
     height: 100vh;
-    overflow: hidden;
-    transform: rotate(90deg);
     display: flex;
     justify-content: center;
     align-items: center;
     font-family: sans-serif;
+    overflow: hidden;
   }
 
   #word {
     color: white;
-    font-size: 18vw;
+    font-size: 10vw;
     font-weight: bold;
     text-align: center;
   }
 
-  #controls {
-    position: absolute;
+  button {
+    position: fixed;
     bottom: 20px;
-    left: 20px;
-    transform: rotate(-90deg);
+    font-size: 18px;
+    padding: 10px 14px;
+    border: none;
+    border-radius: 8px;
+    background: white;
+    color: black;
   }
 
-  button {
-    font-size: 16px;
-    padding: 10px 14px;
-  }
+  #addBtn { right: 20px; }
+  #exportBtn { right: 80px; }
+  #importBtn { right: 140px; }
 </style>
 </head>
 
@@ -43,49 +45,67 @@
 
 <div id="word">Start</div>
 
-<div id="controls">
-  <button onclick="addWord()">➕ Lägg till ord</button>
-</div>
+<button id="addBtn">＋</button>
+<button id="exportBtn">⬇️</button>
+<button id="importBtn">⬆️</button>
+<input type="file" id="importFile" style="display:none" />
 
 <script>
 const wordEl = document.getElementById("word");
+const addBtn = document.getElementById("addBtn");
+const exportBtn = document.getElementById("exportBtn");
+const importBtn = document.getElementById("importBtn");
+const importFile = document.getElementById("importFile");
 
 let words = [];
 let index = 0;
 let isRunning = false;
 let bufferTimer = null;
 
-// 🧠 ORDLISTA (sparas i webbläsaren)
 let dictionary = JSON.parse(localStorage.getItem("dictionary") || "{}");
 
-// 🔧 SPEECH
+let lastHeardWord = "";
+
+// 🎤 SPEECH
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 const recognition = new SpeechRecognition();
 
 recognition.lang = "sv-SE";
 recognition.continuous = true;
-recognition.interimResults = false;
+recognition.interimResults = false; // 🔒 STABIL
 
-// 🧠 När text kommer (stabil version + buffert)
 recognition.onresult = (event) => {
   const text = event.results[event.results.length - 1][0].transcript;
 
   clearTimeout(bufferTimer);
 
   bufferTimer = setTimeout(() => {
-    words = text.split(" ");
+    words = text
+      .toLowerCase()
+      .replace(/[.,!?]/g, "")
+      .trim()
+      .split(" ");
+
     index = 0;
-  }, 400); // 🟢 liten buffert = stabilare
+
+    if (words.length > 0) {
+      lastHeardWord = words[words.length - 1];
+    }
+
+  }, 400); // 🔒 stabil timing
 };
 
-// ▶️ WORD ENGINE (stabil)
+// 🔁 AUTO-RESTART
+recognition.onend = () => recognition.start();
+recognition.onerror = () => recognition.start();
+
+// ▶️ WORD ENGINE
 function processWords() {
   if (!isRunning) return;
 
   if (index < words.length) {
     let word = words[index].toLowerCase();
 
-    // 🔁 ersätt via ordlista
     if (dictionary[word]) {
       word = dictionary[word];
     }
@@ -93,12 +113,64 @@ function processWords() {
     wordEl.textContent = word;
     index++;
 
-    const delay = 250 + word.length * 25;
+    const delay = 250 + word.length * 25; // 🔒 stabil flow
 
     setTimeout(processWords, delay);
   } else {
     setTimeout(processWords, 100);
   }
+}
+
+// ➕ LÄGG TILL ORD
+addBtn.onclick = () => {
+  const correct = prompt("Skriv rätt ord:");
+  if (!correct) return;
+
+  if (lastHeardWord) {
+    dictionary[lastHeardWord] = capitalize(correct);
+    localStorage.setItem("dictionary", JSON.stringify(dictionary));
+    alert("Sparat!");
+  }
+};
+
+// ⬇️ EXPORT
+exportBtn.onclick = () => {
+  const dataStr = JSON.stringify(dictionary, null, 2);
+  const blob = new Blob([dataStr], { type: "application/json" });
+
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "dictionary.json";
+  a.click();
+  URL.revokeObjectURL(url);
+};
+
+// ⬆️ IMPORT
+importBtn.onclick = () => importFile.click();
+
+importFile.onchange = (event) => {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+
+  reader.onload = (e) => {
+    try {
+      const imported = JSON.parse(e.target.result);
+      dictionary = { ...dictionary, ...imported };
+      localStorage.setItem("dictionary", JSON.stringify(dictionary));
+      alert("Importerat!");
+    } catch {
+      alert("Fel fil");
+    }
+  };
+
+  reader.readAsText(file);
+};
+
+function capitalize(word) {
+  return word.charAt(0).toUpperCase() + word.slice(1);
 }
 
 function start() {
@@ -108,22 +180,6 @@ function start() {
   }
 }
 
-// ➕ LÄGG TILL ORD
-function addWord() {
-  const heard = prompt("Vad hörde appen?");
-  if (!heard) return;
-
-  const correct = prompt("Hur ska det visas?");
-  if (!correct) return;
-
-  dictionary[heard.toLowerCase()] = correct;
-
-  localStorage.setItem("dictionary", JSON.stringify(dictionary));
-
-  alert("Sparat!");
-}
-
-// starta
 recognition.start();
 start();
 </script>
