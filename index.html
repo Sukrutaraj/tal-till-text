@@ -40,6 +40,7 @@ body {
   height: 100%;
 }
 
+/* knappar */
 button {
   position: fixed;
   font-size: 16px;
@@ -88,7 +89,7 @@ navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
   };
 });
 
-// 🔥 RECEIVE TEXT FROM SERVER
+// 🔥 RECEIVE TEXT
 socket.onmessage = (event) => {
   const text = event.data
     .toLowerCase()
@@ -125,13 +126,15 @@ document.getElementById("addBtn").onclick = () => {
   const correct = prompt("Skriv rätt ord:");
   if (!correct) return;
 
-  dictionary[lastWord] = correct;
-  localStorage.setItem("dictionary", JSON.stringify(dictionary));
+  if (lastWord) {
+    dictionary[lastWord] = correct;
+    localStorage.setItem("dictionary", JSON.stringify(dictionary));
+  }
 };
 
 // ⬇️ EXPORT
 document.getElementById("exportBtn").onclick = () => {
-  const blob = new Blob([JSON.stringify(dictionary)], { type: "application/json" });
+  const blob = new Blob([JSON.stringify(dictionary, null, 2)], { type: "application/json" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
   a.download = "dictionary.json";
