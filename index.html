@@ -4,45 +4,54 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-<!-- 📱 iPhone fullscreen -->
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black">
 
-<title>Breathing Subtitles</title>
+<title>Live Subtitles</title>
 
 <style>
-  body {
-    margin: 0;
-    background: black;
-    height: 100vh;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    font-family: sans-serif;
-    overflow: hidden;
-  }
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+}
 
-  #word {
-    color: white;
-    font-weight: bold;
-    text-align: center;
-    max-width: 90vw;
-    word-break: break-word;
-  }
+body {
+  background: black;
+  height: 100dvh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-family: sans-serif;
+  overflow: hidden;
+}
 
-  button {
-    position: fixed;
-    font-size: 16px;
-    padding: 8px 12px;
-    border: none;
-    border-radius: 8px;
-    background: white;
-    color: black;
-  }
+#word {
+  color: white;
+  font-weight: bold;
+  text-align: center;
+  max-width: 90vw;
+  word-break: break-word;
 
-  #addBtn { bottom: 20px; right: 20px; }
-  #exportBtn { bottom: 20px; right: 80px; }
-  #importBtn { bottom: 20px; right: 140px; }
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100%;
+}
+
+button {
+  position: fixed;
+  font-size: 16px;
+  padding: 8px 12px;
+  border: none;
+  border-radius: 8px;
+  background: white;
+  color: black;
+}
+
+#addBtn { bottom: 20px; right: 20px; }
+#exportBtn { bottom: 20px; right: 80px; }
+#importBtn { bottom: 20px; right: 140px; }
 </style>
 </head>
 
@@ -62,18 +71,16 @@ const exportBtn = document.getElementById("exportBtn");
 const importBtn = document.getElementById("importBtn");
 const importFile = document.getElementById("importFile");
 
-let words = [];
-let index = 0;
-let isRunning = false;
-let bufferTimer = null;
+// 🔄 dictionary
+let dictionary = JSON.parse(localStorage.getItem("dictionary") || {});
 
-// 🔄 LOAD FUNCTION (AUTO SYNC)
-function loadDictionary() {
-  return JSON.parse(localStorage.getItem("dictionary") || "{}");
-}
+// 🧠 state
+let finalTranscript = "";
+let currentTranscript = "";
+let lastWordCount = 0;
+let lastWord = "";
 
-let dictionary = loadDictionary();
-let lastHeardWord = "";
+const WINDOW_SIZE = 3;
 
 // 🎤 SPEECH
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -81,76 +88,80 @@ const recognition = new SpeechRecognition();
 
 recognition.lang = "sv-SE";
 recognition.continuous = true;
-recognition.interimResults = false;
+recognition.interimResults = true;
 
+// 🎯 LIVE RESULT
 recognition.onresult = (event) => {
-  const text = event.results[event.results.length - 1][0].transcript;
+  let interim = "";
+  let final = "";
 
-  clearTimeout(bufferTimer);
-
-  bufferTimer = setTimeout(() => {
-    words = text
+  for (let i = event.resultIndex; i < event.results.length; i++) {
+    const transcript = event.results[i][0].transcript
       .toLowerCase()
       .replace(/[.,!?]/g, "")
-      .trim()
-      .split(" ");
+      .trim();
 
-    index = 0;
-
-    if (words.length > 0) {
-      lastHeardWord = words[words.length - 1];
+    if (event.results[i].isFinal) {
+      final += transcript + " ";
+    } else {
+      interim += transcript;
     }
+  }
 
-  }, 400);
+  finalTranscript += final;
+  currentTranscript = interim;
+
+  updateDisplay();
 };
 
-// 🔁 AUTO-RESTART (STABILITET)
+// 🔠 DISPLAY LOGIK (INGA UPPREPNINGAR)
+function updateDisplay() {
+  const fullText = (finalTranscript + " " + currentTranscript).trim();
+
+  let words = fullText.split(" ").filter(Boolean);
+
+  if (words.length === 0) return;
+
+  // 🔥 endast nya ord
+  if (words.length <= lastWordCount) return;
+
+  const newWords = words.slice(lastWordCount);
+  lastWordCount = words.length;
+
+  // 🔥 visa chunk
+  let chunk = newWords.slice(-WINDOW_SIZE);
+
+  chunk = chunk.map(w => dictionary[w] || w);
+
+  const text = chunk.join(" ");
+  wordEl.textContent = text;
+
+  lastWord = chunk[chunk.length - 1];
+
+  // 🔠 dynamisk storlek
+  const length = text.length;
+
+  let size;
+  if (length <= 10) size = "16vw";
+  else if (length <= 20) size = "12vw";
+  else if (length <= 30) size = "9vw";
+  else size = "6vw";
+
+  wordEl.style.fontSize = size;
+}
+
+// 🔁 AUTO RESTART
 recognition.onend = () => recognition.start();
 recognition.onerror = () => recognition.start();
-
-// ▶️ WORD ENGINE
-function processWords() {
-  if (!isRunning) return;
-
-  if (index < words.length) {
-    let word = words[index].toLowerCase();
-
-    if (dictionary[word]) {
-      word = dictionary[word];
-    }
-
-    wordEl.textContent = word;
-
-    // 🔠 DYNAMISK TEXTSTORLEK
-    const length = word.length;
-    let size;
-
-    if (length <= 4) size = "18vw";
-    else if (length <= 8) size = "14vw";
-    else if (length <= 12) size = "10vw";
-    else size = "7vw";
-
-    wordEl.style.fontSize = size;
-
-    index++;
-
-    const delay = 250 + word.length * 25;
-
-    setTimeout(processWords, delay);
-  } else {
-    setTimeout(processWords, 100);
-  }
-}
 
 // ➕ LÄGG TILL ORD
 addBtn.onclick = () => {
   const correct = prompt("Skriv rätt ord:");
   if (!correct) return;
 
-  if (lastHeardWord) {
-    dictionary[lastHeardWord] = capitalize(correct);
+  if (lastWord) {
+    dictionary[lastWord] = capitalize(correct);
     localStorage.setItem("dictionary", JSON.stringify(dictionary));
-    dictionary = loadDictionary(); // 🔥 sync direkt
     alert("Sparat!");
   }
 };
@@ -182,7 +193,6 @@ importFile.onchange = (event) => {
       const imported = JSON.parse(e.target.result);
       dictionary = { ...dictionary, ...imported };
       localStorage.setItem("dictionary", JSON.stringify(dictionary));
-      dictionary = loadDictionary(); // 🔥 sync direkt
       alert("Importerat!");
     } catch {
       alert("Fel fil");
@@ -192,27 +202,13 @@ importFile.onchange = (event) => {
   reader.readAsText(file);
 };
 
-// 🔄 AUTO SYNC när appen öppnas igen
-document.addEventListener("visibilitychange", () => {
-  if (!document.hidden) {
-    dictionary = loadDictionary();
-  }
-});
-
+// 🔤 helper
 function capitalize(word) {
   return word.charAt(0).toUpperCase() + word.slice(1);
 }
 
-function start() {
-  if (!isRunning) {
-    dictionary = loadDictionary(); // 🔥 alltid senaste
-    isRunning = true;
-    processWords();
-  }
-}
-
+// ▶️ START
 recognition.start();
-start();
 </script>
 
 </body>
