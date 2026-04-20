@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Breathing Subtitles</title>
+
+<style>
+  body {
+    margin: 0;
+    background: black;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    overflow: hidden;
+    transform: rotate(90deg);
+  }
+
+  #word {
+    color: white;
+    font-size: 18vw;
+    font-weight: bold;
+    text-align: center;
+    transition: opacity 0.1s linear;
+  }
+</style>
+</head>
+
+<body>
+
+<div id="word">Start</div>
+
+<script>
+const wordEl = document.getElementById("word");
+
+let queue = [];
+let isRunning = false;
+let lastText = "";
+
+// 🔁 WORD ENGINE
+function processQueue() {
+  if (!isRunning) return;
+
+  if (queue.length > 0) {
+    const word = queue.shift();
+
+    // fade effekt (lite mer "andning")
+    wordEl.style.opacity = 0;
+    setTimeout(() => {
+      wordEl.textContent = word;
+      wordEl.style.opacity = 1;
+    }, 50);
+
+    // ⏱️ snabbare och mer responsiv timing
+    const delay = 150 + word.length * 20;
+
+    setTimeout(processQueue, delay);
+  } else {
+    setTimeout(processQueue, 80);
+  }
+}
+
+function startEngine() {
+  if (!isRunning) {
+    isRunning = true;
+    processQueue();
+  }
+}
+
+// 🎤 SPEECH RECOGNITION
+const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+if (!SpeechRecognition) {
+  alert("Din webbläsare stödjer inte speech recognition");
+}
+
+const recognition = new SpeechRecognition();
+
+recognition.lang = "sv-SE";
+recognition.continuous = true;
+recognition.interimResults = true;
+
+// 🔥 VIKTIG FIX: bara nya ord
+recognition.onresult = (event) => {
+  const result = event.results[event.results.length - 1];
+  const text = result[0].transcript;
+
+  const newPart = text.replace(lastText, "").trim();
+
+  if (newPart.length > 0) {
+    const words = newPart.split(" ");
+    queue.push(...words);
+    lastText = text;
+  }
+};
+
+recognition.onerror = (event) => {
+  console.log("Error:", event.error);
+};
+
+// starta direkt
+recognition.start();
+startEngine();
+
+</script>
+
+</body>
+</html>
