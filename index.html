@@ -32,6 +32,7 @@ body {
   text-align: center;
   max-width: 90vw;
   word-break: break-word;
+  line-height: 1.2;
 
   display: flex;
   justify-content: center;
@@ -66,10 +67,6 @@ button {
 
 <script>
 const wordEl = document.getElementById("word");
-const addBtn = document.getElementById("addBtn");
-const exportBtn = document.getElementById("exportBtn");
-const importBtn = document.getElementById("importBtn");
-const importFile = document.getElementById("importFile");
 
 // 🔄 dictionary
 let dictionary = JSON.parse(localStorage.getItem("dictionary") || {});
@@ -114,22 +111,26 @@ recognition.onresult = (event) => {
   updateDisplay();
 };
 
-// 🔠 DISPLAY LOGIK (INGA UPPREPNINGAR)
+// 🔠 DISPLAY LOGIK (INGA UPPREPNINGAR + HELA ORD)
 function updateDisplay() {
   const fullText = (finalTranscript + " " + currentTranscript).trim();
 
-  let words = fullText.split(" ").filter(Boolean);
+  let words = fullText
+    .split(" ")
+    .filter(w => w.length > 1); // 🔥 filtrera bort fragment
 
   if (words.length === 0) return;
 
-  // 🔥 endast nya ord
   if (words.length <= lastWordCount) return;
 
   const newWords = words.slice(lastWordCount);
   lastWordCount = words.length;
 
-  // 🔥 visa chunk
-  let chunk = newWords.slice(-WINDOW_SIZE);
+  let chunk = newWords
+    .filter(w => w.length > 2) // 🔥 ta bort halvord
+    .slice(-WINDOW_SIZE);
+
+  if (chunk.length === 0) return;
 
   chunk = chunk.map(w => dictionary[w] || w);
 
@@ -150,12 +151,26 @@ function updateDisplay() {
   wordEl.style.fontSize = size;
 }
 
-// 🔁 AUTO RESTART
-recognition.onend = () => recognition.start();
-recognition.onerror = () => recognition.start();
+// 🔁 STABIL AUTO-RESTART
+let restartTimeout;
+
+function safeRestart() {
+  try { recognition.stop(); } catch(e) {}
+  setTimeout(() => {
+    try { recognition.start(); } catch(e) {}
+  }, 200);
+}
+
+recognition.onend = () => safeRestart();
+recognition.onerror = () => safeRestart();
+
+// 🔥 WATCHDOG (förhindrar freeze)
+setInterval(() => {
+  safeRestart();
+}, 10000);
 
 // ➕ LÄGG TILL ORD
-addBtn.onclick = () => {
+document.getElementById("addBtn").onclick = () => {
   const correct = prompt("Skriv rätt ord:");
   if (!correct) return;
 
@@ -167,7 +182,7 @@ addBtn.onclick = () => {
 };
 
 // ⬇️ EXPORT
-exportBtn.onclick = () => {
+document.getElementById("exportBtn").onclick = () => {
   const dataStr = JSON.stringify(dictionary, null, 2);
   const blob = new Blob([dataStr], { type: "application/json" });
 
@@ -180,7 +195,9 @@ exportBtn.onclick = () => {
 };
 
 // ⬆️ IMPORT
-importBtn.onclick = () => importFile.click();
+const importFile = document.getElementById("importFile");
+
+document.getElementById("importBtn").onclick = () => importFile.click();
 
 importFile.onchange = (event) => {
   const file = event.target.files[0];
