@@ -80,7 +80,7 @@ let lastWord = "";
 navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
   const mediaRecorder = new MediaRecorder(stream);
 
-  mediaRecorder.start(250);
+  mediaRecorder.start(100);
 
   mediaRecorder.ondataavailable = (e) => {
     if (socket.readyState === 1) {
