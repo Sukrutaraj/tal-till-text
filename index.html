@@ -3,6 +3,11 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<!-- 📱 iPhone fullscreen -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+
 <title>Breathing Subtitles</title>
 
 <style>
@@ -19,25 +24,26 @@
 
   #word {
     color: white;
-    font-size: 10vw;
     font-weight: bold;
     text-align: center;
+    max-width: 90vw;
+    word-break: break-word;
   }
 
   button {
     position: fixed;
-    bottom: 20px;
-    font-size: 18px;
-    padding: 10px 14px;
+    font-size: 16px;
+    padding: 8px 12px;
     border: none;
     border-radius: 8px;
     background: white;
     color: black;
   }
 
-  #addBtn { right: 20px; }
-  #exportBtn { right: 80px; }
-  #importBtn { right: 140px; }
+  #addBtn { bottom: 20px; right: 20px; }
+  #exportBtn { bottom: 20px; right: 80px; }
+  #importBtn { bottom: 20px; right: 140px; }
+  #fsBtn { top: 20px; right: 20px; }
 </style>
 </head>
 
@@ -48,6 +54,7 @@
 <button id="addBtn">＋</button>
 <button id="exportBtn">⬇️</button>
 <button id="importBtn">⬆️</button>
+<button id="fsBtn">⛶</button>
 <input type="file" id="importFile" style="display:none" />
 
 <script>
@@ -56,6 +63,7 @@ const addBtn = document.getElementById("addBtn");
 const exportBtn = document.getElementById("exportBtn");
 const importBtn = document.getElementById("importBtn");
 const importFile = document.getElementById("importFile");
+const fsBtn = document.getElementById("fsBtn");
 
 let words = [];
 let index = 0;
@@ -63,7 +71,6 @@ let isRunning = false;
 let bufferTimer = null;
 
 let dictionary = JSON.parse(localStorage.getItem("dictionary") || "{}");
-
 let lastHeardWord = "";
 
 // 🎤 SPEECH
@@ -72,7 +79,7 @@ const recognition = new SpeechRecognition();
 
 recognition.lang = "sv-SE";
 recognition.continuous = true;
-recognition.interimResults = false; // 🔒 STABIL
+recognition.interimResults = false;
 
 recognition.onresult = (event) => {
   const text = event.results[event.results.length - 1][0].transcript;
@@ -92,7 +99,7 @@ recognition.onresult = (event) => {
       lastHeardWord = words[words.length - 1];
     }
 
-  }, 400); // 🔒 stabil timing
+  }, 400);
 };
 
 // 🔁 AUTO-RESTART
@@ -111,9 +118,21 @@ function processWords() {
     }
 
     wordEl.textContent = word;
+
+    // 🔠 DYNAMISK TEXTSTORLEK
+    const length = word.length;
+    let size;
+
+    if (length <= 4) size = "18vw";
+    else if (length <= 8) size = "14vw";
+    else if (length <= 12) size = "10vw";
+    else size = "7vw";
+
+    wordEl.style.fontSize = size;
+
     index++;
 
-    const delay = 250 + word.length * 25; // 🔒 stabil flow
+    const delay = 250 + word.length * 25;
 
     setTimeout(processWords, delay);
   } else {
@@ -167,6 +186,13 @@ importFile.onchange = (event) => {
   };
 
   reader.readAsText(file);
+};
+
+// ⛶ FULLSCREEN
+fsBtn.onclick = () => {
+  if (document.documentElement.requestFullscreen) {
+    document.documentElement.requestFullscreen();
+  }
 };
 
 function capitalize(word) {
