@@ -68,79 +68,48 @@ button {
 <script>
 const wordEl = document.getElementById("word");
 
-// 🔄 dictionary
-let dictionary = JSON.parse(localStorage.getItem("dictionary") || {});
+// 🔌 CONNECT TO YOUR SERVER
+const socket = new WebSocket("wss://speech-server-0b86.onrender.com");
 
-// 🧠 state
-let finalTranscript = "";
-let currentTranscript = "";
-let lastWordCount = 0;
+// 🧠 dictionary
+let dictionary = JSON.parse(localStorage.getItem("dictionary") || {});
 let lastWord = "";
 
-const WINDOW_SIZE = 3;
+// 🎤 MICROPHONE STREAM
+navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
+  const mediaRecorder = new MediaRecorder(stream);
 
-// 🎤 SPEECH
-const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-const recognition = new SpeechRecognition();
+  mediaRecorder.start(250);
 
-recognition.lang = "sv-SE";
-recognition.continuous = true;
-recognition.interimResults = true;
-
-// 🎯 LIVE RESULT
-recognition.onresult = (event) => {
-  let interim = "";
-  let final = "";
-
-  for (let i = event.resultIndex; i < event.results.length; i++) {
-    const transcript = event.results[i][0].transcript
-      .toLowerCase()
-      .replace(/[.,!?]/g, "")
-      .trim();
-
-    if (event.results[i].isFinal) {
-      final += transcript + " ";
-    } else {
-      interim += transcript;
+  mediaRecorder.ondataavailable = (e) => {
+    if (socket.readyState === 1) {
+      socket.send(e.data);
     }
-  }
+  };
+});
 
-  finalTranscript += final;
-  currentTranscript = interim;
+// 🔥 RECEIVE TEXT FROM SERVER
+socket.onmessage = (event) => {
+  const text = event.data
+    .toLowerCase()
+    .replace(/[.,!?]/g, "")
+    .trim();
 
-  updateDisplay();
-};
+  if (!text) return;
 
-// 🔠 DISPLAY LOGIK (INGA UPPREPNINGAR + HELA ORD)
-function updateDisplay() {
-  const fullText = (finalTranscript + " " + currentTranscript).trim();
+  let words = text.split(" ").filter(Boolean);
 
-  let words = fullText
-    .split(" ")
-    .filter(w => w.length > 1); // 🔥 filtrera bort fragment
-
-  if (words.length === 0) return;
-
-  if (words.length <= lastWordCount) return;
-
-  const newWords = words.slice(lastWordCount);
-  lastWordCount = words.length;
-
-  let chunk = newWords
-    .filter(w => w.length > 2) // 🔥 ta bort halvord
-    .slice(-WINDOW_SIZE);
-
-  if (chunk.length === 0) return;
+  let chunk = words.slice(-3);
 
   chunk = chunk.map(w => dictionary[w] || w);
 
-  const text = chunk.join(" ");
-  wordEl.textContent = text;
+  const display = chunk.join(" ");
+  wordEl.textContent = display;
 
   lastWord = chunk[chunk.length - 1];
 
-  // 🔠 dynamisk storlek
-  const length = text.length;
+  // 🔠 dynamic size
+  const length = display.length;
 
   let size;
   if (length <= 10) size = "16vw";
@@ -149,49 +118,24 @@ function updateDisplay() {
   else size = "6vw";
 
   wordEl.style.fontSize = size;
-}
+};
 
-// 🔁 STABIL AUTO-RESTART
-let restartTimeout;
-
-function safeRestart() {
-  try { recognition.stop(); } catch(e) {}
-  setTimeout(() => {
-    try { recognition.start(); } catch(e) {}
-  }, 200);
-}
-
-recognition.onend = () => safeRestart();
-recognition.onerror = () => safeRestart();
-
-// 🔥 WATCHDOG (förhindrar freeze)
-setInterval(() => {
-  safeRestart();
-}, 10000);
-
-// ➕ LÄGG TILL ORD
+// ➕ ADD WORD
 document.getElementById("addBtn").onclick = () => {
   const correct = prompt("Skriv rätt ord:");
   if (!correct) return;
 
-  if (lastWord) {
-    dictionary[lastWord] = capitalize(correct);
-    localStorage.setItem("dictionary", JSON.stringify(dictionary));
-    alert("Sparat!");
-  }
+  dictionary[lastWord] = correct;
+  localStorage.setItem("dictionary", JSON.stringify(dictionary));
 };
 
 // ⬇️ EXPORT
 document.getElementById("exportBtn").onclick = () => {
-  const dataStr = JSON.stringify(dictionary, null, 2);
-  const blob = new Blob([dataStr], { type: "application/json" });
-
-  const url = URL.createObjectURL(blob);
+  const blob = new Blob([JSON.stringify(dictionary)], { type: "application/json" });
   const a = document.createElement("a");
-  a.href = url;
+  a.href = URL.createObjectURL(blob);
   a.download = "dictionary.json";
   a.click();
-  URL.revokeObjectURL(url);
 };
 
 // ⬆️ IMPORT
@@ -199,33 +143,14 @@ const importFile = document.getElementById("importFile");
 
 document.getElementById("importBtn").onclick = () => importFile.click();
 
-importFile.onchange = (event) => {
-  const file = event.target.files[0];
-  if (!file) return;
-
+importFile.onchange = (e) => {
   const reader = new FileReader();
-
-  reader.onload = (e) => {
-    try {
-      const imported = JSON.parse(e.target.result);
-      dictionary = { ...dictionary, ...imported };
-      localStorage.setItem("dictionary", JSON.stringify(dictionary));
-      alert("Importerat!");
-    } catch {
-      alert("Fel fil");
-    }
+  reader.onload = (ev) => {
+    dictionary = JSON.parse(ev.target.result);
+    localStorage.setItem("dictionary", JSON.stringify(dictionary));
   };
-
-  reader.readAsText(file);
+  reader.readAsText(e.target.files[0]);
 };
-
-// 🔤 helper
-function capitalize(word) {
-  return word.charAt(0).toUpperCase() + word.slice(1);
-}
-
-// ▶️ START
-recognition.start();
 </script>
 
 </body>
