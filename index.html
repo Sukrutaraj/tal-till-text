@@ -9,12 +9,13 @@
   body {
     margin: 0;
     background: black;
-    display: flex;
-    justify-content: center;
-    align-items: center;
     height: 100vh;
     overflow: hidden;
     transform: rotate(90deg);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-family: sans-serif;
   }
 
   #word {
@@ -22,7 +23,18 @@
     font-size: 18vw;
     font-weight: bold;
     text-align: center;
-    transition: opacity 0.1s linear;
+  }
+
+  #controls {
+    position: absolute;
+    bottom: 20px;
+    left: 20px;
+    transform: rotate(-90deg);
+  }
+
+  button {
+    font-size: 16px;
+    padding: 10px 14px;
   }
 </style>
 </head>
@@ -31,78 +43,89 @@
 
 <div id="word">Start</div>
 
+<div id="controls">
+  <button onclick="addWord()">➕ Lägg till ord</button>
+</div>
+
 <script>
 const wordEl = document.getElementById("word");
 
-let queue = [];
+let words = [];
+let index = 0;
 let isRunning = false;
-let lastText = "";
+let bufferTimer = null;
 
-// 🔁 WORD ENGINE
-function processQueue() {
-  if (!isRunning) return;
+// 🧠 ORDLISTA (sparas i webbläsaren)
+let dictionary = JSON.parse(localStorage.getItem("dictionary") || "{}");
 
-  if (queue.length > 0) {
-    const word = queue.shift();
-
-    // fade effekt (lite mer "andning")
-    wordEl.style.opacity = 0;
-    setTimeout(() => {
-      wordEl.textContent = word;
-      wordEl.style.opacity = 1;
-    }, 50);
-
-    // ⏱️ snabbare och mer responsiv timing
-    const delay = 150 + word.length * 20;
-
-    setTimeout(processQueue, delay);
-  } else {
-    setTimeout(processQueue, 80);
-  }
-}
-
-function startEngine() {
-  if (!isRunning) {
-    isRunning = true;
-    processQueue();
-  }
-}
-
-// 🎤 SPEECH RECOGNITION
+// 🔧 SPEECH
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-
-if (!SpeechRecognition) {
-  alert("Din webbläsare stödjer inte speech recognition");
-}
-
 const recognition = new SpeechRecognition();
 
 recognition.lang = "sv-SE";
 recognition.continuous = true;
-recognition.interimResults = true;
+recognition.interimResults = false;
 
-// 🔥 VIKTIG FIX: bara nya ord
+// 🧠 När text kommer (stabil version + buffert)
 recognition.onresult = (event) => {
-  const result = event.results[event.results.length - 1];
-  const text = result[0].transcript;
+  const text = event.results[event.results.length - 1][0].transcript;
 
-  const newPart = text.replace(lastText, "").trim();
+  clearTimeout(bufferTimer);
 
-  if (newPart.length > 0) {
-    const words = newPart.split(" ");
-    queue.push(...words);
-    lastText = text;
+  bufferTimer = setTimeout(() => {
+    words = text.split(" ");
+    index = 0;
+  }, 400); // 🟢 liten buffert = stabilare
+};
+
+// ▶️ WORD ENGINE (stabil)
+function processWords() {
+  if (!isRunning) return;
+
+  if (index < words.length) {
+    let word = words[index].toLowerCase();
+
+    // 🔁 ersätt via ordlista
+    if (dictionary[word]) {
+      word = dictionary[word];
+    }
+
+    wordEl.textContent = word;
+    index++;
+
+    const delay = 250 + word.length * 25;
+
+    setTimeout(processWords, delay);
+  } else {
+    setTimeout(processWords, 100);
   }
-};
+}
 
-recognition.onerror = (event) => {
-  console.log("Error:", event.error);
-};
+function start() {
+  if (!isRunning) {
+    isRunning = true;
+    processWords();
+  }
+}
 
-// starta direkt
+// ➕ LÄGG TILL ORD
+function addWord() {
+  const heard = prompt("Vad hörde appen?");
+  if (!heard) return;
+
+  const correct = prompt("Hur ska det visas?");
+  if (!correct) return;
+
+  dictionary[heard.toLowerCase()] = correct;
+
+  localStorage.setItem("dictionary", JSON.stringify(dictionary));
+
+  alert("Sparat!");
+}
+
+// starta
 recognition.start();
-startEngine();
-
+start();
 </script>
 
 </body>
