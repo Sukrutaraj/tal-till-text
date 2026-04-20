@@ -129,16 +129,23 @@ document.getElementById("addBtn").onclick = () => {
   if (lastWord) {
     dictionary[lastWord] = correct;
     localStorage.setItem("dictionary", JSON.stringify(dictionary));
+
+    alert("Sparat: " + lastWord + " → " + correct);
+  } else {
+    alert("Inget ord att ersätta just nu");
   }
 };
 
 // ⬇️ EXPORT
 document.getElementById("exportBtn").onclick = () => {
   const blob = new Blob([JSON.stringify(dictionary, null, 2)], { type: "application/json" });
+
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
   a.download = "dictionary.json";
   a.click();
+
+  alert("Ordbok nedladdad");
 };
 
 // ⬆️ IMPORT
@@ -147,14 +154,28 @@ const importFile = document.getElementById("importFile");
 document.getElementById("importBtn").onclick = () => importFile.click();
 
 importFile.onchange = (e) => {
-  const reader = new FileReader();
-  reader.onload = (ev) => {
-    dictionary = JSON.parse(ev.target.result);
-    localStorage.setItem("dictionary", JSON.stringify(dictionary));
-  };
-  reader.readAsText(e.target.files[0]);
-};
-</script>
+  const file = e.target.files[0];
+  if (!file) {
+    alert("Ingen fil vald");
+    return;
+  }
 
-</body>
-</html>
+  const reader = new FileReader();
+
+  reader.onload = (ev) => {
+    try {
+      const imported = JSON.parse(ev.target.result);
+
+      // slå ihop med befintlig dictionary
+      dictionary = { ...dictionary, ...imported };
+
+      localStorage.setItem("dictionary", JSON.stringify(dictionary));
+
+      alert("Ordbok importerad!");
+    } catch {
+      alert("Fel format på filen");
+    }
+  };
+
+  reader.readAsText(file);
+};
