@@ -27,6 +27,7 @@ body {
   height: 100vh;
 }
 
+/* text */
 .line {
   color: white;
   font-weight: bold;
@@ -34,13 +35,10 @@ body {
   margin: 10px 0;
 }
 
-.fullscreen .line {
-  margin: 0;
-}
-
 #line1 { opacity: 0.6; }
 #line2 { opacity: 1; }
 
+/* buttons */
 button {
   position: fixed;
   bottom: 20px;
@@ -50,12 +48,12 @@ button {
   border: none;
 }
 
-#addBtn { right: 20px; }
-#exportBtn { right: 80px; }
-#importBtn { right: 140px; }
+#fsBtn { right: 20px; }
+#nameBtn { right: 80px; }
+#editBtn { right: 140px; }
 
 .fullscreen button {
-  display: none;
+  opacity: 0.2;
 }
 </style>
 </head>
@@ -67,10 +65,9 @@ button {
   <div id="line2" class="line">Start</div>
 </div>
 
-<button id="addBtn">＋</button>
-<button id="exportBtn">⬇️</button>
-<button id="importBtn">⬆️</button>
-<input type="file" id="importFile" style="display:none" />
+<button id="fsBtn">⛶</button>
+<button id="nameBtn">＋N</button>
+<button id="editBtn">✎</button>
 
 <script>
 const container = document.getElementById("container");
@@ -80,11 +77,11 @@ const line2 = document.getElementById("line2");
 // 🔌 SERVER
 const socket = new WebSocket("wss://speech-server-0b86.onrender.com");
 
-// 🧠 dictionary
-let dictionary = JSON.parse(localStorage.getItem("dictionary") || {});
+// 🧠 NAMN-DICTIONARY (separat!)
+let names = JSON.parse(localStorage.getItem("names") || "{}");
 let lastText = "";
 
-// 🎤 MICROPHONE (OPTIMERAD)
+// 🎤 MICROPHONE
 navigator.mediaDevices.getUserMedia({
   audio: {
     echoCancellation: true,
@@ -105,8 +102,6 @@ navigator.mediaDevices.getUserMedia({
     }
   };
 
-}).catch(err => {
-  console.error("Mic error:", err);
 });
 
 // 🔥 TEXT FLOW
@@ -117,16 +112,15 @@ socket.onmessage = (event) => {
     .trim();
 
   if (!text || text === lastText) return;
-
   lastText = text;
 
   let words = text.split(" ").filter(Boolean);
 
+  // 🔥 ersätt bara namn
+  words = words.map(w => names[w] || w);
+
   let current = words.slice(-4);
   let previous = words.slice(-8, -4);
-
-  current = current.map(w => dictionary[w] || w);
-  previous = previous.map(w => dictionary[w] || w);
 
   line2.textContent = current.join(" ");
   line1.textContent = previous.join(" ");
@@ -142,77 +136,51 @@ socket.onmessage = (event) => {
   line2.style.fontSize = size;
 };
 
-// ➕ ADD WORD (KONTROLLERAD)
-document.getElementById("addBtn").onclick = () => {
-  const heard = prompt("Vilket ord var fel?");
+//
+// 🔘 FULLSCREEN BUTTON
+//
+let isFullscreen = false;
+
+document.getElementById("fsBtn").onclick = () => {
+  isFullscreen = !isFullscreen;
+
+  if (isFullscreen) {
+    container.classList.add("fullscreen");
+  } else {
+    container.classList.remove("fullscreen");
+  }
+};
+
+//
+// ➕ ADD NAME
+//
+document.getElementById("nameBtn").onclick = () => {
+  const heard = prompt("Hur hördes namnet?");
   if (!heard) return;
 
-  const correct = prompt("Vad ska det vara?");
+  const correct = prompt("Hur ska det vara?");
   if (!correct) return;
 
-  dictionary[heard.toLowerCase()] = correct;
-  localStorage.setItem("dictionary", JSON.stringify(dictionary));
+  names[heard.toLowerCase()] = correct;
+  localStorage.setItem("names", JSON.stringify(names));
 
-  alert("Sparat: " + heard + " → " + correct);
+  alert("Sparat namn!");
 };
 
-// ⬇️ EXPORT (FIXAD FÖR IPHONE)
-document.getElementById("exportBtn").onclick = () => {
-  const data = JSON.stringify(dictionary, null, 2);
-  const blob = new Blob([data], { type: "application/json" });
-  const url = URL.createObjectURL(blob);
+//
+// ✏️ EDIT / DELETE NAMES
+//
+document.getElementById("editBtn").onclick = () => {
+  let list = Object.keys(names).join("\n");
 
-  window.open(url, "_blank");
+  const word = prompt("Sparade namn:\n" + list + "\n\nVilket vill du ta bort?");
+  if (!word) return;
 
-  alert("Tryck på dela-knappen → 'Spara i Filer'");
+  delete names[word.toLowerCase()];
+  localStorage.setItem("names", JSON.stringify(names));
+
+  alert("Borttagen!");
 };
-
-// ⬆️ IMPORT
-const importFile = document.getElementById("importFile");
-
-document.getElementById("importBtn").onclick = () => importFile.click();
-
-importFile.onchange = (e) => {
-  const file = e.target.files[0];
-  if (!file) return;
-
-  const reader = new FileReader();
-
-  reader.onload = (ev) => {
-    try {
-      const imported = JSON.parse(ev.target.result);
-
-      dictionary = { ...dictionary, ...imported };
-      localStorage.setItem("dictionary", JSON.stringify(dictionary));
-
-      alert("Ordbok importerad");
-    } catch {
-      alert("Fel fil");
-    }
-  };
-
-  reader.readAsText(file);
-};
-
-// 🔥 FULLSCREEN (HÅLL FINGER)
-let isFullscreen = false;
-let pressTimer;
-
-document.body.addEventListener("touchstart", () => {
-  pressTimer = setTimeout(() => {
-    isFullscreen = !isFullscreen;
-
-    if (isFullscreen) {
-      container.classList.add("fullscreen");
-    } else {
-      container.classList.remove("fullscreen");
-    }
-  }, 500);
-});
-
-document.body.addEventListener("touchend", () => {
-  clearTimeout(pressTimer);
-});
 </script>
 
 </body>
