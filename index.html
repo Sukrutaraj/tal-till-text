@@ -88,10 +88,10 @@ loadIdentifiers();
 // 🎤 MIC + DEEPGRAM
 navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
 
-  const socket = new WebSocket(
-    "wss://api.deepgram.com/v1/listen?model=nova-2&language=sv",
-    ["token", DEEPGRAM_KEY]
-  );
+ const socket = new WebSocket(
+  "wss://api.deepgram.com/v1/listen?model=nova-2&language=sv&encoding=webm",
+  ["token", DEEPGRAM_KEY]
+);
 
   socket.onopen = () => {
     const recorder = new MediaRecorder(stream);
