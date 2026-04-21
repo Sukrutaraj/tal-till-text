@@ -52,8 +52,17 @@ const socket = new WebSocket("wss://speech-server-0b86.onrender.com");
 let dictionary = JSON.parse(localStorage.getItem("dictionary") || {});
 let lastText = "";
 
-// 🎤 MICROPHONE
-navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
+// 🎤 MICROPHONE (OPTIMERAD)
+navigator.mediaDevices.getUserMedia({
+  audio: {
+    echoCancellation: true,
+    noiseSuppression: true,
+    autoGainControl: true,
+    channelCount: 1,
+    sampleRate: 16000
+  }
+}).then(stream => {
+
   const mediaRecorder = new MediaRecorder(stream);
 
   mediaRecorder.start(100);
@@ -63,6 +72,9 @@ navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
       socket.send(e.data);
     }
   };
+
+}).catch(err => {
+  console.error("Mic error:", err);
 });
 
 // 🔥 TEXT FLOW (STABIL)
