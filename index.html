@@ -17,19 +17,16 @@ body {
   font-family: sans-serif;
 }
 
-/* container */
 #container {
   width: 90vw;
   text-align: center;
 }
 
-/* fullscreen */
 #container.fullscreen {
   width: 100vw;
   height: 100vh;
 }
 
-/* text */
 .line {
   color: white;
   font-weight: bold;
@@ -44,7 +41,6 @@ body {
 #line1 { opacity: 0.6; }
 #line2 { opacity: 1; }
 
-/* buttons */
 button {
   position: fixed;
   bottom: 20px;
@@ -71,7 +67,6 @@ button {
   <div id="line2" class="line">Start</div>
 </div>
 
-<!-- buttons -->
 <button id="addBtn">＋</button>
 <button id="exportBtn">⬇️</button>
 <button id="importBtn">⬆️</button>
@@ -88,9 +83,8 @@ const socket = new WebSocket("wss://speech-server-0b86.onrender.com");
 // 🧠 dictionary
 let dictionary = JSON.parse(localStorage.getItem("dictionary") || {});
 let lastText = "";
-let lastWord = "";
 
-// 🎤 MICROPHONE
+// 🎤 MICROPHONE (OPTIMERAD)
 navigator.mediaDevices.getUserMedia({
   audio: {
     echoCancellation: true,
@@ -137,9 +131,6 @@ socket.onmessage = (event) => {
   line2.textContent = current.join(" ");
   line1.textContent = previous.join(" ");
 
-  lastWord = current[current.length - 1];
-
-  // font size
   const length = line2.textContent.length;
 
   let size;
@@ -151,32 +142,29 @@ socket.onmessage = (event) => {
   line2.style.fontSize = size;
 };
 
-// ➕ ADD WORD
+// ➕ ADD WORD (KONTROLLERAD)
 document.getElementById("addBtn").onclick = () => {
-  if (!lastWord) {
-    alert("Inget ord att spara");
-    return;
-  }
+  const heard = prompt("Vilket ord var fel?");
+  if (!heard) return;
 
-  const correct = prompt("Skriv rätt ord:");
+  const correct = prompt("Vad ska det vara?");
   if (!correct) return;
 
-  dictionary[lastWord] = correct;
+  dictionary[heard.toLowerCase()] = correct;
   localStorage.setItem("dictionary", JSON.stringify(dictionary));
 
-  alert("Sparat: " + lastWord + " → " + correct);
+  alert("Sparat: " + heard + " → " + correct);
 };
 
-// ⬇️ EXPORT
+// ⬇️ EXPORT (FIXAD FÖR IPHONE)
 document.getElementById("exportBtn").onclick = () => {
-  const blob = new Blob([JSON.stringify(dictionary, null, 2)], { type: "application/json" });
+  const data = JSON.stringify(dictionary, null, 2);
+  const blob = new Blob([data], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
 
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob);
-  a.download = "dictionary.json";
-  a.click();
+  window.open(url, "_blank");
 
-  alert("Ordbok nedladdad");
+  alert("Tryck på dela-knappen → 'Spara i Filer'");
 };
 
 // ⬆️ IMPORT
@@ -195,7 +183,6 @@ importFile.onchange = (e) => {
       const imported = JSON.parse(ev.target.result);
 
       dictionary = { ...dictionary, ...imported };
-
       localStorage.setItem("dictionary", JSON.stringify(dictionary));
 
       alert("Ordbok importerad");
@@ -207,17 +194,24 @@ importFile.onchange = (e) => {
   reader.readAsText(file);
 };
 
-// 🔥 FULLSCREEN (double tap)
+// 🔥 FULLSCREEN (HÅLL FINGER)
 let isFullscreen = false;
+let pressTimer;
 
-document.body.addEventListener("dblclick", () => {
-  isFullscreen = !isFullscreen;
+document.body.addEventListener("touchstart", () => {
+  pressTimer = setTimeout(() => {
+    isFullscreen = !isFullscreen;
 
-  if (isFullscreen) {
-    container.classList.add("fullscreen");
-  } else {
-    container.classList.remove("fullscreen");
-  }
+    if (isFullscreen) {
+      container.classList.add("fullscreen");
+    } else {
+      container.classList.remove("fullscreen");
+    }
+  }, 500);
+});
+
+document.body.addEventListener("touchend", () => {
+  clearTimeout(pressTimer);
 });
 </script>
 
