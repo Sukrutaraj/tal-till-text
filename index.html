@@ -93,18 +93,24 @@ navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
   ["token", DEEPGRAM_KEY]
 );
 
-  socket.onopen = () => {
-    const recorder = new MediaRecorder(stream);
+socket.onopen = () => {
 
-    recorder.ondataavailable = e => {
-      if (socket.readyState === 1) {
-        socket.send(e.data);
-      }
-    };
+  // 🔥 Kolla stöd (viktig för Safari)
+  const options = MediaRecorder.isTypeSupported("audio/webm")
+    ? { mimeType: "audio/webm" }
+    : {};
 
-    recorder.start(250);
+  const recorder = new MediaRecorder(stream, options);
+
+  recorder.ondataavailable = e => {
+    if (socket.readyState === 1) {
+      socket.send(e.data);
+    }
   };
 
+  recorder.start(500);
+};
+  
   socket.onmessage = (message) => {
     const data = JSON.parse(message.data);
 
