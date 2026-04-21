@@ -76,10 +76,24 @@ const line2 = document.getElementById("line2");
 
 // 🔌 SERVER
 const socket = new WebSocket("wss://speech-server-0b86.onrender.com");
+const API = "https://speech-server-0b86.onrender.com";
 
-// 🧠 NAMN-DICTIONARY (separat!)
-let names = JSON.parse(localStorage.getItem("names") || "{}");
+// 🧠 NAMN (från server)
+let names = {};
 let lastText = "";
+
+// 🔥 HÄMTA NAMN VID START
+async function loadNames() {
+  try {
+    const res = await fetch(API + "/names");
+    names = await res.json();
+    console.log("Names loaded:", names);
+  } catch (e) {
+    console.error("Could not load names");
+  }
+}
+
+loadNames();
 
 // 🎤 MICROPHONE
 navigator.mediaDevices.getUserMedia({
@@ -116,7 +130,7 @@ socket.onmessage = (event) => {
 
   let words = text.split(" ").filter(Boolean);
 
-  // 🔥 ersätt bara namn
+  // 🔥 ersätt namn från server
   words = words.map(w => names[w] || w);
 
   let current = words.slice(-4);
@@ -137,7 +151,49 @@ socket.onmessage = (event) => {
 };
 
 //
-// 🔘 FULLSCREEN BUTTON
+// ➕ ADD NAME (sparas till server)
+//
+document.getElementById("nameBtn").onclick = async () => {
+  const heard = prompt("Hur hördes namnet?");
+  if (!heard) return;
+
+  const correct = prompt("Hur ska det vara?");
+  if (!correct) return;
+
+  try {
+    await fetch(API + "/names", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ heard, correct })
+    });
+
+    // uppdatera lokalt direkt
+    names[heard.toLowerCase()] = correct;
+
+    alert("Sparat!");
+  } catch {
+    alert("Kunde inte spara");
+  }
+};
+
+//
+// ✏️ DELETE NAME (från server + lokalt)
+//
+document.getElementById("editBtn").onclick = () => {
+  let list = Object.keys(names).join("\n");
+
+  const word = prompt("Sparade namn:\n" + list + "\n\nVilket vill du ta bort?");
+  if (!word) return;
+
+  delete names[word.toLowerCase()];
+
+  alert("Borttagen lokalt (server reset rensar helt)");
+};
+
+//
+// 🔘 FULLSCREEN
 //
 let isFullscreen = false;
 
@@ -150,37 +206,7 @@ document.getElementById("fsBtn").onclick = () => {
     container.classList.remove("fullscreen");
   }
 };
-
-//
-// ➕ ADD NAME
-//
-document.getElementById("nameBtn").onclick = () => {
-  const heard = prompt("Hur hördes namnet?");
-  if (!heard) return;
-
-  const correct = prompt("Hur ska det vara?");
-  if (!correct) return;
-
-  names[heard.toLowerCase()] = correct;
-  localStorage.setItem("names", JSON.stringify(names));
-
-  alert("Sparat namn!");
-};
-
-//
-// ✏️ EDIT / DELETE NAMES
-//
-document.getElementById("editBtn").onclick = () => {
-  let list = Object.keys(names).join("\n");
-
-  const word = prompt("Sparade namn:\n" + list + "\n\nVilket vill du ta bort?");
-  if (!word) return;
-
-  delete names[word.toLowerCase()];
-  localStorage.setItem("names", JSON.stringify(names));
-
-  alert("Borttagen!");
-};
+</script>
 </script>
 
 </body>
