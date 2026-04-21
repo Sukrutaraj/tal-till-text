@@ -123,13 +123,20 @@ const triggers = [
 // 🔥 HÄMTA DATA
 async function loadIdentifiers() {
   try {
-    const res = await fetch(API + "/names");
+    const res = await fetch(SUPABASE_URL + "/rest/v1/names", {
+      headers: {
+        apikey: SUPABASE_KEY, // Använd din public API key här
+        Authorization: "Bearer " + SUPABASE_KEY // Lägg till API-nyckeln i Authorization-headern
+      }
+    });
+
     identifiers = await res.json();
     console.log("Loaded identifiers:", identifiers);
   } catch {
     console.log("Kunde inte ladda identifiers");
   }
 }
+  
 loadIdentifiers();
 
 // 🎤 MICROPHONE
