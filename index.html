@@ -37,6 +37,35 @@ body {
 #line1 { opacity: 0.6; }
 #line2 { opacity: 1; }
 
+let identifiers = {};
+let lastText = "";
+
+// 🔥 HÄMTA FRÅN SUPABASE
+async function loadIdentifiers() {
+  try {
+    const res = await fetch(SUPABASE_URL + "/rest/v1/names", {
+      headers: {
+        apikey: SUPABASE_KEY,
+        Authorization: "Bearer " + SUPABASE_KEY
+      }
+    });
+
+    const data = await res.json();
+
+    identifiers = {};
+    data.forEach(row => {
+      identifiers[row.heard] = row.correct;
+    });
+
+    console.log("Loaded:", identifiers);
+
+  } catch (e) {
+    console.log("Fel vid hämtning");
+  }
+}
+
+loadIdentifiers();
+  
 button {
   position: fixed;
   bottom: 20px;
@@ -165,28 +194,33 @@ socket.onmessage = (event) => {
 };
 
 // ➕ ADD IDENTIFIER
-document.getElementById("addBtn").onclick = () => {
+document.getElementById("addBtn").onclick = async () => {
+
   const heard = prompt("Hur hördes ordet?");
   if (!heard) return;
 
   const correct = prompt("Vad ska det vara?");
   if (!correct) return;
 
-  // 🔥 uppdatera direkt (snabb respons)
+  // uppdatera direkt i appen
   identifiers[heard.toLowerCase()] = correct;
 
-  // 🔥 skicka till server (utan att blockera UI)
-  fetch(API + "/names", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({ heard, correct })
-  }).catch(() => {
-    console.log("Server save failed");
-  });
+  try {
+    await fetch(SUPABASE_URL + "/rest/v1/names", {
+      method: "POST",
+      headers: {
+        apikey: SUPABASE_KEY,
+        Authorization: "Bearer " + SUPABASE_KEY,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify([{ heard, correct }])
+    });
 
-  alert("Sparat!");
+    alert("Sparat!");
+
+  } catch {
+    alert("Kunde inte spara");
+  }
 };
 
 // ✏️ DELETE
