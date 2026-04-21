@@ -4,26 +4,17 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black">
-
 <title>Live Subtitles</title>
 
 <style>
-html, body {
-  margin: 0;
-  padding: 0;
-  height: 100%;
-}
-
 body {
+  margin: 0;
   background: black;
   height: 100dvh;
   display: flex;
   justify-content: center;
   align-items: center;
   font-family: sans-serif;
-  overflow: hidden;
 }
 
 #word {
@@ -31,29 +22,8 @@ body {
   font-weight: bold;
   text-align: center;
   max-width: 90vw;
-  word-break: break-word;
   line-height: 1.2;
-
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  height: 100%;
 }
-
-/* knappar */
-button {
-  position: fixed;
-  font-size: 16px;
-  padding: 8px 12px;
-  border: none;
-  border-radius: 8px;
-  background: white;
-  color: black;
-}
-
-#addBtn { bottom: 20px; right: 20px; }
-#exportBtn { bottom: 20px; right: 80px; }
-#importBtn { bottom: 20px; right: 140px; }
 </style>
 </head>
 
@@ -61,26 +31,21 @@ button {
 
 <div id="word">Start</div>
 
-<button id="addBtn">＋</button>
-<button id="exportBtn">⬇️</button>
-<button id="importBtn">⬆️</button>
-<input type="file" id="importFile" style="display:none" />
-
 <script>
 const wordEl = document.getElementById("word");
 
-// 🔌 CONNECT TO YOUR SERVER
+// 🔌 SERVER CONNECTION
 const socket = new WebSocket("wss://speech-server-0b86.onrender.com");
 
 // 🧠 dictionary
 let dictionary = JSON.parse(localStorage.getItem("dictionary") || {});
-let lastWord = "";
+let lastText = "";
 
-// 🎤 MICROPHONE STREAM
+// 🎤 MICROPHONE
 navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
   const mediaRecorder = new MediaRecorder(stream);
 
-  mediaRecorder.start(100);
+  mediaRecorder.start(100); // 🔥 snabbare
 
   mediaRecorder.ondataavailable = (e) => {
     if (socket.readyState === 1) {
@@ -89,14 +54,15 @@ navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
   };
 });
 
-// 🔥 RECEIVE TEXT
+// 🔥 TEXT FLOW (STABIL)
 socket.onmessage = (event) => {
-  const text = event.data
+  let text = event.data
     .toLowerCase()
     .replace(/[.,!?]/g, "")
     .trim();
 
-  if (!text) return;
+  if (!text || text === lastText) return;
+  lastText = text;
 
   let words = text.split(" ").filter(Boolean);
 
@@ -107,75 +73,15 @@ socket.onmessage = (event) => {
   const display = chunk.join(" ");
   wordEl.textContent = display;
 
-  lastWord = chunk[chunk.length - 1];
-
-  // 🔠 dynamic size
+  // 🔠 dynamisk storlek
   const length = display.length;
 
-  let size;
-  if (length <= 10) size = "16vw";
-  else if (length <= 20) size = "12vw";
-  else if (length <= 30) size = "9vw";
-  else size = "6vw";
-
-  wordEl.style.fontSize = size;
+  if (length <= 10) wordEl.style.fontSize = "16vw";
+  else if (length <= 20) wordEl.style.fontSize = "12vw";
+  else if (length <= 30) wordEl.style.fontSize = "9vw";
+  else wordEl.style.fontSize = "6vw";
 };
+</script>
 
-// ➕ ADD WORD
-document.getElementById("addBtn").onclick = () => {
-  const correct = prompt("Skriv rätt ord:");
-  if (!correct) return;
-
-  if (lastWord) {
-    dictionary[lastWord] = correct;
-    localStorage.setItem("dictionary", JSON.stringify(dictionary));
-
-    alert("Sparat: " + lastWord + " → " + correct);
-  } else {
-    alert("Inget ord att ersätta just nu");
-  }
-};
-
-// ⬇️ EXPORT
-document.getElementById("exportBtn").onclick = () => {
-  const blob = new Blob([JSON.stringify(dictionary, null, 2)], { type: "application/json" });
-
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob);
-  a.download = "dictionary.json";
-  a.click();
-
-  alert("Ordbok nedladdad");
-};
-
-// ⬆️ IMPORT
-const importFile = document.getElementById("importFile");
-
-document.getElementById("importBtn").onclick = () => importFile.click();
-
-importFile.onchange = (e) => {
-  const file = e.target.files[0];
-  if (!file) {
-    alert("Ingen fil vald");
-    return;
-  }
-
-  const reader = new FileReader();
-
-  reader.onload = (ev) => {
-    try {
-      const imported = JSON.parse(ev.target.result);
-
-      // slå ihop med befintlig dictionary
-      dictionary = { ...dictionary, ...imported };
-
-      localStorage.setItem("dictionary", JSON.stringify(dictionary));
-
-      alert("Ordbok importerad!");
-    } catch {
-      alert("Fel format på filen");
-    }
-  };
-
-  reader.readAsText(file);
-};
+</body>
+</html>
