@@ -27,7 +27,6 @@ body {
   height: 100vh;
 }
 
-/* text */
 .line {
   color: white;
   font-weight: bold;
@@ -38,7 +37,6 @@ body {
 #line1 { opacity: 0.6; }
 #line2 { opacity: 1; }
 
-/* buttons */
 button {
   position: fixed;
   bottom: 20px;
@@ -49,12 +47,8 @@ button {
 }
 
 #fsBtn { right: 20px; }
-#nameBtn { right: 80px; }
+#addBtn { right: 80px; }
 #editBtn { right: 140px; }
-
-.fullscreen button {
-  opacity: 0.2;
-}
 </style>
 </head>
 
@@ -66,7 +60,7 @@ button {
 </div>
 
 <button id="fsBtn">⛶</button>
-<button id="nameBtn">＋N</button>
+<button id="addBtn">＋</button>
 <button id="editBtn">✎</button>
 
 <script>
@@ -78,22 +72,34 @@ const line2 = document.getElementById("line2");
 const socket = new WebSocket("wss://speech-server-0b86.onrender.com");
 const API = "https://speech-server-0b86.onrender.com";
 
-// 🧠 NAMN (från server)
-let names = {};
+// 🧠 IDENTIFIERS (server)
+let identifiers = {};
 let lastText = "";
 
-// 🔥 HÄMTA NAMN VID START
-async function loadNames() {
+// 🔥 TRIGGERS
+const triggers = [
+  "mitt namn är",
+  "jag heter",
+  "jag kallas",
+  "detta är",
+  "det här är",
+  "vi är på",
+  "jag är på",
+  "platsen heter",
+  "verksamheten heter"
+];
+
+// 🔥 HÄMTA DATA
+async function loadIdentifiers() {
   try {
     const res = await fetch(API + "/names");
-    names = await res.json();
-    console.log("Names loaded:", names);
-  } catch (e) {
-    console.error("Could not load names");
+    identifiers = await res.json();
+    console.log("Loaded identifiers:", identifiers);
+  } catch {
+    console.log("Kunde inte ladda identifiers");
   }
 }
-
-loadNames();
+loadIdentifiers();
 
 // 🎤 MICROPHONE
 navigator.mediaDevices.getUserMedia({
@@ -107,7 +113,6 @@ navigator.mediaDevices.getUserMedia({
 }).then(stream => {
 
   const mediaRecorder = new MediaRecorder(stream);
-
   mediaRecorder.start(100);
 
   mediaRecorder.ondataavailable = (e) => {
@@ -130,8 +135,15 @@ socket.onmessage = (event) => {
 
   let words = text.split(" ").filter(Boolean);
 
-  // 🔥 ersätt namn från server
-  words = words.map(w => names[w] || w);
+  let fullSentence = words.join(" ");
+
+  let shouldReplace = triggers.some(trigger =>
+    fullSentence.includes(trigger)
+  );
+
+  if (shouldReplace) {
+    words = words.map(w => identifiers[w] || w);
+  }
 
   let current = words.slice(-4);
   let previous = words.slice(-8, -4);
@@ -150,51 +162,40 @@ socket.onmessage = (event) => {
   line2.style.fontSize = size;
 };
 
-//
-// ➕ ADD NAME (sparas till server)
-//
-document.getElementById("nameBtn").onclick = async () => {
-  const heard = prompt("Hur hördes namnet?");
+// ➕ ADD IDENTIFIER
+document.getElementById("addBtn").onclick = async () => {
+  const heard = prompt("Hur hördes ordet?");
   if (!heard) return;
 
-  const correct = prompt("Hur ska det vara?");
+  const correct = prompt("Vad ska det vara?");
   if (!correct) return;
 
-  try {
-    await fetch(API + "/names", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({ heard, correct })
-    });
+  await fetch(API + "/names", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ heard, correct })
+  });
 
-    // uppdatera lokalt direkt
-    names[heard.toLowerCase()] = correct;
+  identifiers[heard.toLowerCase()] = correct;
 
-    alert("Sparat!");
-  } catch {
-    alert("Kunde inte spara");
-  }
+  alert("Sparat!");
 };
 
-//
-// ✏️ DELETE NAME (från server + lokalt)
-//
+// ✏️ DELETE
 document.getElementById("editBtn").onclick = () => {
-  let list = Object.keys(names).join("\n");
+  let list = Object.keys(identifiers).join("\n");
 
-  const word = prompt("Sparade namn:\n" + list + "\n\nVilket vill du ta bort?");
+  const word = prompt("Sparade:\n" + list + "\n\nVilket vill du ta bort?");
   if (!word) return;
 
-  delete names[word.toLowerCase()];
+  delete identifiers[word.toLowerCase()];
 
-  alert("Borttagen lokalt (server reset rensar helt)");
+  alert("Borttagen lokalt");
 };
 
-//
 // 🔘 FULLSCREEN
-//
 let isFullscreen = false;
 
 document.getElementById("fsBtn").onclick = () => {
@@ -206,7 +207,6 @@ document.getElementById("fsBtn").onclick = () => {
     container.classList.remove("fullscreen");
   }
 };
-</script>
 </script>
 
 </body>
