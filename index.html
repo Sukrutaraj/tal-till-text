@@ -17,24 +17,35 @@ body {
   font-family: sans-serif;
 }
 
-#word {
+#container {
+  width: 90vw;
+  text-align: center;
+}
+
+.line {
   color: white;
   font-weight: bold;
-  text-align: center;
-  max-width: 90vw;
   line-height: 1.2;
+  margin: 10px 0;
 }
+
+#line1 { opacity: 0.6; }
+#line2 { opacity: 1; }
 </style>
 </head>
 
 <body>
 
-<div id="word">Start</div>
+<div id="container">
+  <div id="line1" class="line"></div>
+  <div id="line2" class="line">Start</div>
+</div>
 
 <script>
-const wordEl = document.getElementById("word");
+const line1 = document.getElementById("line1");
+const line2 = document.getElementById("line2");
 
-// 🔌 SERVER CONNECTION
+// 🔌 SERVER
 const socket = new WebSocket("wss://speech-server-0b86.onrender.com");
 
 // 🧠 dictionary
@@ -45,7 +56,7 @@ let lastText = "";
 navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
   const mediaRecorder = new MediaRecorder(stream);
 
-  mediaRecorder.start(100); // 🔥 snabbare
+  mediaRecorder.start(100);
 
   mediaRecorder.ondataavailable = (e) => {
     if (socket.readyState === 1) {
@@ -62,24 +73,31 @@ socket.onmessage = (event) => {
     .trim();
 
   if (!text || text === lastText) return;
+
   lastText = text;
 
   let words = text.split(" ").filter(Boolean);
 
-  let chunk = words.slice(-3);
+  // 🔥 dela upp i två rader
+  let current = words.slice(-4);
+  let previous = words.slice(-8, -4);
 
-  chunk = chunk.map(w => dictionary[w] || w);
+  current = current.map(w => dictionary[w] || w);
+  previous = previous.map(w => dictionary[w] || w);
 
-  const display = chunk.join(" ");
-  wordEl.textContent = display;
+  line2.textContent = current.join(" ");
+  line1.textContent = previous.join(" ");
 
   // 🔠 dynamisk storlek
-  const length = display.length;
+  const length = current.join(" ").length;
 
-  if (length <= 10) wordEl.style.fontSize = "16vw";
-  else if (length <= 20) wordEl.style.fontSize = "12vw";
-  else if (length <= 30) wordEl.style.fontSize = "9vw";
-  else wordEl.style.fontSize = "6vw";
+  let size;
+  if (length <= 10) size = "14vw";
+  else if (length <= 20) size = "10vw";
+  else size = "7vw";
+
+  line1.style.fontSize = size;
+  line2.style.fontSize = size;
 };
 </script>
 
