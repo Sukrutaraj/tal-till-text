@@ -163,22 +163,26 @@ socket.onmessage = (event) => {
 };
 
 // ➕ ADD IDENTIFIER
-document.getElementById("addBtn").onclick = async () => {
+document.getElementById("addBtn").onclick = () => {
   const heard = prompt("Hur hördes ordet?");
   if (!heard) return;
 
   const correct = prompt("Vad ska det vara?");
   if (!correct) return;
 
-  await fetch(API + "/names", {
+  // 🔥 uppdatera direkt (snabb respons)
+  identifiers[heard.toLowerCase()] = correct;
+
+  // 🔥 skicka till server (utan att blockera UI)
+  fetch(API + "/names", {
     method: "POST",
     headers: {
       "Content-Type": "application/json"
     },
     body: JSON.stringify({ heard, correct })
+  }).catch(() => {
+    console.log("Server save failed");
   });
-
-  identifiers[heard.toLowerCase()] = correct;
 
   alert("Sparat!");
 };
