@@ -3,7 +3,6 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
 <title>Live Subtitles</title>
 
 <style>
@@ -22,11 +21,6 @@ body {
   text-align: center;
 }
 
-#container.fullscreen {
-  width: 100vw;
-  height: 100vh;
-}
-
 .line {
   color: white;
   font-weight: bold;
@@ -37,47 +31,16 @@ body {
 #line1 { opacity: 0.6; }
 #line2 { opacity: 1; }
 
-let identifiers = {};
-let lastText = "";
-
-// 🔥 HÄMTA FRÅN SUPABASE
-async function loadIdentifiers() {
-  try {
-    const res = await fetch(SUPABASE_URL + "/rest/v1/names", {
-      headers: {
-        apikey: SUPABASE_KEY,
-        Authorization: "Bearer " + SUPABASE_KEY
-      }
-    });
-
-    const data = await res.json();
-
-    identifiers = {};
-    data.forEach(row => {
-      identifiers[row.heard] = row.correct;
-    });
-
-    console.log("Loaded:", identifiers);
-
-  } catch (e) {
-    console.log("Fel vid hämtning");
-  }
-}
-
-loadIdentifiers();
-  
-button {
+#controls {
   position: fixed;
   bottom: 20px;
-  font-size: 18px;
-  padding: 10px 14px;
-  border-radius: 10px;
-  border: none;
+  left: 20px;
 }
 
-#fsBtn { right: 20px; }
-#addBtn { right: 80px; }
-#editBtn { right: 140px; }
+button {
+  font-size: 16px;
+  padding: 10px;
+}
 </style>
 </head>
 
@@ -88,171 +51,111 @@ button {
   <div id="line2" class="line">Start</div>
 </div>
 
-<button id="fsBtn">⛶</button>
-<button id="addBtn">＋</button>
-<button id="editBtn">✎</button>
+<div id="controls">
+  <button id="addBtn">＋</button>
+</div>
 
 <script>
+const DEEPGRAM_KEY = "0010773f2290220c0e6e6a7084fe14acfc9f7c82";
+
 const SUPABASE_URL = "https://smqskohuruxdagyvowge.supabase.co";
 const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNtcXNrb2h1cnV4ZGFneXZvd2dlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY3NjUyMDgsImV4cCI6MjA5MjM0MTIwOH0.rSCBJ_N6r8e8VV9oohxO6Eyvj0BPi4Y8xTPkATNTfaM";
-const container = document.getElementById("container");
+
 const line1 = document.getElementById("line1");
 const line2 = document.getElementById("line2");
 
-// 🔌 SERVER
-const socket = new WebSocket("wss://speech-server-0b86.onrender.com");
-const API = "https://speech-server-0b86.onrender.com";
-
-// 🧠 IDENTIFIERS (server)
 let identifiers = {};
-let lastText = "";
+let lastFinal = "";
 
-// 🔥 TRIGGERS
-const triggers = [
-  "mitt namn är",
-  "jag heter",
-  "jag kallas",
-  "detta är",
-  "det här är",
-  "vi är på",
-  "jag är på",
-  "platsen heter",
-  "verksamheten heter"
-];
-
-// 🔥 HÄMTA DATA
+// 🔥 LOAD NAMES
 async function loadIdentifiers() {
-  try {
-    const res = await fetch(SUPABASE_URL + "/rest/v1/names", {
-      headers: {
-        apikey: SUPABASE_KEY, // Använd din public API key här
-        Authorization: "Bearer " + SUPABASE_KEY // Lägg till API-nyckeln i Authorization-headern
-      }
-    });
+  const res = await fetch(SUPABASE_URL + "/rest/v1/names", {
+    headers: {
+      apikey: SUPABASE_KEY,
+      Authorization: "Bearer " + SUPABASE_KEY
+    }
+  });
 
-    identifiers = await res.json();
-    console.log("Loaded identifiers:", identifiers);
-  } catch {
-    console.log("Kunde inte ladda identifiers");
-  }
+  const data = await res.json();
+
+  identifiers = {};
+  data.forEach(row => {
+    identifiers[row.heard] = row.correct;
+  });
 }
-  
 loadIdentifiers();
 
-// 🎤 MICROPHONE
-navigator.mediaDevices.getUserMedia({
-  audio: {
-    echoCancellation: true,
-    noiseSuppression: true,
-    autoGainControl: true,
-    channelCount: 1,
-    sampleRate: 16000
-  }
-}).then(stream => {
+// 🎤 MIC + DEEPGRAM
+navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
 
-  const mediaRecorder = new MediaRecorder(stream);
-  mediaRecorder.start(100);
+  const socket = new WebSocket(
+    "wss://api.deepgram.com/v1/listen?model=nova-2&language=sv",
+    ["token", DEEPGRAM_KEY]
+  );
 
-  mediaRecorder.ondataavailable = (e) => {
-    if (socket.readyState === 1) {
-      socket.send(e.data);
-    }
+  socket.onopen = () => {
+    const recorder = new MediaRecorder(stream);
+
+    recorder.ondataavailable = e => {
+      if (socket.readyState === 1) {
+        socket.send(e.data);
+      }
+    };
+
+    recorder.start(250);
+  };
+
+  socket.onmessage = (message) => {
+    const data = JSON.parse(message.data);
+
+    const transcript = data.channel?.alternatives[0]?.transcript;
+
+    if (!transcript) return;
+
+    const words = transcript.toLowerCase().split(" ");
+
+    const mapped = words.map(w => identifiers[w] || w);
+
+    const current = mapped.slice(-4);
+    const previous = mapped.slice(-8, -4);
+
+    line2.textContent = current.join(" ");
+    line1.textContent = previous.join(" ");
+
+    const length = line2.textContent.length;
+
+    let size;
+    if (length <= 10) size = "14vw";
+    else if (length <= 20) size = "10vw";
+    else size = "7vw";
+
+    line1.style.fontSize = size;
+    line2.style.fontSize = size;
   };
 
 });
 
-// 🔥 TEXT FLOW
-socket.onmessage = (event) => {
-  let text = event.data
-    .toLowerCase()
-    .replace(/[.,!?]/g, "")
-    .trim();
-
-  if (!text || text === lastText) return;
-  lastText = text;
-
-  let words = text.split(" ").filter(Boolean);
-
-  let fullSentence = words.join(" ");
-
-  let shouldReplace = triggers.some(trigger =>
-    fullSentence.includes(trigger)
-  );
-
-  if (shouldReplace) {
-    words = words.map(w => identifiers[w] || w);
-  }
-
-  let current = words.slice(-4);
-  let previous = words.slice(-8, -4);
-
-  line2.textContent = current.join(" ");
-  line1.textContent = previous.join(" ");
-
-  const length = line2.textContent.length;
-
-  let size;
-  if (length <= 10) size = "14vw";
-  else if (length <= 20) size = "10vw";
-  else size = "7vw";
-
-  line1.style.fontSize = size;
-  line2.style.fontSize = size;
-};
-
-// ➕ ADD IDENTIFIER
+// ➕ ADD WORD
 document.getElementById("addBtn").onclick = async () => {
-
   const heard = prompt("Hur hördes ordet?");
   if (!heard) return;
 
   const correct = prompt("Vad ska det vara?");
   if (!correct) return;
 
-  // uppdatera direkt i appen
   identifiers[heard.toLowerCase()] = correct;
 
-  try {
-    await fetch(SUPABASE_URL + "/rest/v1/names", {
-      method: "POST",
-      headers: {
-        apikey: SUPABASE_KEY,
-        Authorization: "Bearer " + SUPABASE_KEY,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify([{ heard, correct }])
-    });
+  await fetch(SUPABASE_URL + "/rest/v1/names", {
+    method: "POST",
+    headers: {
+      apikey: SUPABASE_KEY,
+      Authorization: "Bearer " + SUPABASE_KEY,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify([{ heard, correct }])
+  });
 
-    alert("Sparat!");
-
-  } catch {
-    alert("Kunde inte spara");
-  }
-};
-
-// ✏️ DELETE
-document.getElementById("editBtn").onclick = () => {
-  let list = Object.keys(identifiers).join("\n");
-
-  const word = prompt("Sparade:\n" + list + "\n\nVilket vill du ta bort?");
-  if (!word) return;
-
-  delete identifiers[word.toLowerCase()];
-
-  alert("Borttagen lokalt");
-};
-
-// 🔘 FULLSCREEN
-let isFullscreen = false;
-
-document.getElementById("fsBtn").onclick = () => {
-  isFullscreen = !isFullscreen;
-
-  if (isFullscreen) {
-    container.classList.add("fullscreen");
-  } else {
-    container.classList.remove("fullscreen");
-  }
+  alert("Sparat");
 };
 </script>
 
