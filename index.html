@@ -25,12 +25,19 @@ body {
 #container {
   width: 90vw;
   text-align: center;
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
 }
 
 .line {
   color: white;
   font-weight: bold;
   line-height: 1.2;
+}
+
+#line2 {
+  font-size: 12vw;
 }
 </style>
 </head>
@@ -45,18 +52,26 @@ body {
 const line2 = document.getElementById("line2");
 
 let identifiers = {};
+
+let spellingMode = false;
+let spelledLetters = [];
 let lastProcessedText = "";
+let lastLetter = "";
 
-// 🔥 MENINGSBUFFER
-let sentenceBuffer = [];
+// 🔥 NY SIDA FLAGGA
+let newPage = false;
 
-// 🔥 MENINGS-ID (fixar mix-buggen)
-let currentSentenceId = 0;
-let lastSentenceId = 0;
-
-// 🔥 PAUS
+// 🔥 PAUS SYSTEM
 let pauseTimer = null;
-const PAUSE_LIMIT = 500;
+const PAUSE_LIMIT = 1200;
+
+function resetPauseTimer() {
+  clearTimeout(pauseTimer);
+
+  pauseTimer = setTimeout(() => {
+    newPage = true;
+  }, PAUSE_LIMIT);
+}
 
 // 🔤 NORMALISERA
 function normalizeWord(w) {
@@ -68,35 +83,6 @@ function normalizeWord(w) {
   if (w === "utropstecken") return "!";
 
   return w;
-}
-
-// 🔥 PAUS = VISA MENING
-function resetPauseTimer() {
-  clearTimeout(pauseTimer);
-
-  pauseTimer = setTimeout(() => {
-
-    if (sentenceBuffer.length > 0) {
-
-      let text = sentenceBuffer.join(" ");
-
-      text = text
-        .replace(" .", ".")
-        .replace(" ,", ",")
-        .replace(" ?", "?")
-        .replace(" !", "!");
-
-      // 🔥 visa HELA meningen
-      line2.textContent = text;
-      line2.style.fontSize = "8vw";
-    }
-
-    // 🔥 reset korrekt
-    sentenceBuffer = [];
-    lastProcessedText = "";
-    currentSentenceId++;   // 🔥 NY MENING
-
-  }, PAUSE_LIMIT);
 }
 
 // 🔥 SPEECH
@@ -144,11 +130,10 @@ recognition.onresult = (event) => {
 
   fullText = fullText.toLowerCase().trim();
 
-  // 🔥 IGNORERA GAMMAL BUFFER EFTER PAUS
-  if (lastSentenceId !== currentSentenceId) {
-    lastProcessedText = fullText;
-    lastSentenceId = currentSentenceId;
-    return;
+  // ✅ RÄTT ORDNING
+  if (newPage) {
+    lastProcessedText = "";
+    newPage = false;
   }
 
   let newText = fullText.replace(lastProcessedText, "").trim();
@@ -157,30 +142,106 @@ recognition.onresult = (event) => {
   lastProcessedText = fullText;
 
   const words = newText.split(" ").filter(Boolean);
+  const allWords = fullText.split(" ").filter(Boolean);
+  const joined = words.join("");
 
-  // 🔥 BYGG MENING
-  words.forEach(w => {
+  // 🔥 START SPELLING
+  if (
+    joined.includes("dingdongstart") ||
+    (joined.includes("dingdong") && joined.includes("start"))
+  ) {
+    spellingMode = true;
+    spelledLetters = [];
+    lastLetter = "";
+    lastProcessedText = "";
+    line2.textContent = "…";
+    return;
+  }
+
+  // 🔥 END SPELLING
+  if (
+    spellingMode &&
+    (
+      joined.includes("dingdongstopp") ||
+      (joined.includes("dingdong") && joined.includes("stopp"))
+    )
+  ) {
+    const name = spelledLetters.join("");
+
+    identifiers[name.toLowerCase()] = name;
+
+    fetch(SUPABASE_URL + "/rest/v1/names", {
+      method: "POST",
+      headers: {
+        apikey: SUPABASE_KEY,
+        Authorization: "Bearer " + SUPABASE_KEY,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify([{ heard: name.toLowerCase(), correct: name }])
+    });
+
+    spellingMode = false;
+    lastProcessedText = "";
+
+    line2.textContent = name;
+    return;
+  }
+
+  // 🔤 SPELLING MODE
+  if (spellingMode) {
+    words.forEach(w => {
+      const letter = w[0];
+      if (!letter.match(/[a-zåäö]/)) return;
+      if (letter === lastLetter) return;
+
+      spelledLetters.push(letter);
+      lastLetter = letter;
+    });
+
+    line2.textContent = spelledLetters.join("");
+    return;
+  }
+
+  // 🔥 NORMAL MODE
+  const mapped = allWords.map(w => {
     const clean = normalizeWord(w);
-    const finalWord = identifiers[clean] || clean;
-
-    sentenceBuffer.push(finalWord);
+    return identifiers[clean] || clean;
   });
 
-  // 🔥 LIVE (senaste ord)
-  const lastWord = sentenceBuffer[sentenceBuffer.length - 1] || "";
+  let focus = mapped.slice(-3);
 
-  line2.textContent = lastWord;
+  if (focus.length >= 1 && focus[focus.length - 1].length <= 4) {
+    focus = [focus[focus.length - 1]];
+  }
 
+  if (mapped.join(" ").length > 30) {
+    focus = mapped.slice(-3);
+  }
+
+  let text = focus.join(" ");
+
+  text = text
+    .replace(" .", ".")
+    .replace(" ,", ",")
+    .replace(" ?", "?")
+    .replace(" !", "!");
+
+  line2.textContent = text;
+
+  // 🔠 DYNAMISK STORLEK
   let size;
-  if (lastWord.length <= 4) size = "20vw";
-  else if (lastWord.length <= 8) size = "16vw";
-  else size = "12vw";
+  if (text.length <= 6) size = "18vw";
+  else if (text.length <= 12) size = "14vw";
+  else if (text.length <= 20) size = "10vw";
+  else size = "7vw";
 
   line2.style.fontSize = size;
 };
 
 // AUTO RESTART
-recognition.onend = () => recognition.start();
+recognition.onend = () => {
+  recognition.start();
+};
 
 // START
 recognition.start();
