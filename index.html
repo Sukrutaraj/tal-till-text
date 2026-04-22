@@ -189,28 +189,32 @@ recognition.onresult = (event) => {
   }
 
   // NORMAL MODE (LEVANDE)
-  const mapped = allWords.map(w => identifiers[w] || w);
+const mapped = allWords.map(w => identifiers[w] || w);
 
-  let chunkSize = 4;
-  const lastWord = mapped[mapped.length - 1] || "";
+// 🔥 FOKUS = senaste orden
+let focus = mapped.slice(-3);
 
-  if (lastWord.length <= 4) chunkSize = 2;
-  if (mapped.join(" ").length > 40) chunkSize = 6;
+// 🔥 OM kort ord → visa 1 ord stort
+if (focus.length >= 1 && focus[focus.length - 1].length <= 4) {
+  focus = [focus[focus.length - 1]];
+}
 
-  const current = mapped.slice(-chunkSize);
-  const previous = mapped.slice(-(chunkSize * 2), -chunkSize);
+// 🔥 OM längre mening → visa 2–3 ord
+if (mapped.join(" ").length > 30) {
+  focus = mapped.slice(-3);
+}
 
-  const currentText = current.join(" ");
-  const prevText = previous.join(" ");
+const text = focus.join(" ");
 
-  line2.textContent = currentText;
-  line1.textContent = prevText;
+line2.textContent = text;
+line1.textContent = "";
 
-  let size;
-  if (currentText.length <= 10) size = "16vw";
-  else if (currentText.length <= 20) size = "12vw";
-  else if (currentText.length <= 35) size = "9vw";
-  else size = "7vw";
+let size;
+
+if (text.length <= 6) size = "18vw";       // 🔥 ENKELT ORD → STORT
+else if (text.length <= 12) size = "14vw";
+else if (text.length <= 20) size = "10vw";
+else size = "7vw";
 
   line2.style.fontSize = size;
   line1.style.fontSize = size;
