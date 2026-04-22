@@ -76,13 +76,13 @@ const line2 = document.getElementById("line2");
 
 let identifiers = {};
 
-// 🔤 SPELLING STATE
+// SPELLING STATE
 let spellingMode = false;
 let spelledLetters = [];
 let lastProcessedText = "";
 let lastLetter = "";
 
-// 🔥 SPEECH
+// SPEECH
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 const recognition = new SpeechRecognition();
 
@@ -90,7 +90,7 @@ recognition.lang = "sv-SE";
 recognition.continuous = true;
 recognition.interimResults = true;
 
-// 🔥 SUPABASE
+// SUPABASE
 const SUPABASE_URL = "https://smqskohuruxdagyvowge.supabase.co";
 const SUPABASE_KEY = "DIN KEY";
 
@@ -110,13 +110,13 @@ async function loadIdentifiers() {
     data.forEach(row => {
       identifiers[row.heard] = row.correct;
     });
-  } catch (e) {
+  } catch {
     console.log("load error");
   }
 }
 loadIdentifiers();
 
-// 🔥 LIVE
+// LIVE TEXT
 recognition.onresult = (event) => {
   let fullText = "";
 
@@ -132,9 +132,11 @@ recognition.onresult = (event) => {
   lastProcessedText = fullText;
 
   const words = newText.split(" ").filter(Boolean);
+  const allWords = fullText.split(" ").filter(Boolean);
+  const joined = words.join("");
 
   // START SPELLING
-  if (words.includes("bokstavera")) {
+  if (joined.includes("kodstart")) {
     spellingMode = true;
     spelledLetters = [];
     lastLetter = "";
@@ -144,7 +146,7 @@ recognition.onresult = (event) => {
   }
 
   // END SPELLING
-  if (spellingMode && words.includes("klart")) {
+  if (spellingMode && joined.includes("kodslut")) {
     const name = spelledLetters.join("");
 
     identifiers[name.toLowerCase()] = name;
@@ -167,13 +169,12 @@ recognition.onresult = (event) => {
     return;
   }
 
-  // SPELLING MODE (FIXAD)
+  // SPELLING MODE
   if (spellingMode) {
     words.forEach(w => {
       const letter = w[0];
 
       if (!letter.match(/[a-zåäö]/)) return;
-
       if (letter === lastLetter) return;
 
       spelledLetters.push(letter);
@@ -181,12 +182,11 @@ recognition.onresult = (event) => {
     });
 
     line2.textContent = spelledLetters.join("");
-    line1.textContent = "bokstavering";
+    line1.textContent = "kodläge";
     return;
   }
 
   // NORMAL MODE
-  const allWords = fullText.split(" ").filter(Boolean);
   const mapped = allWords.map(w => identifiers[w] || w);
 
   const current = mapped.slice(-4);
@@ -206,13 +206,15 @@ recognition.onresult = (event) => {
   line2.style.fontSize = size;
 };
 
-// AUTO RESTART
-recognition.onend = () => recognition.start();
+// AUTO RESTART (UTANFÖR onresult)
+recognition.onend = () => {
+  recognition.start();
+};
 
 // START
 recognition.start();
 
-// ➕ ADD WORD
+// ADD WORD
 document.getElementById("addBtn").onclick = async () => {
   const heard = prompt("Hur hördes ordet?");
   if (!heard) return;
@@ -235,9 +237,11 @@ document.getElementById("addBtn").onclick = async () => {
   alert("Sparat");
 };
 
-// ⬇️ EXPORT
+// EXPORT
 document.getElementById("exportBtn").onclick = () => {
-  const blob = new Blob([JSON.stringify(identifiers, null, 2)], { type: "application/json" });
+  const blob = new Blob([JSON.stringify(identifiers, null, 2)], {
+    type: "application/json"
+  });
 
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
@@ -245,7 +249,7 @@ document.getElementById("exportBtn").onclick = () => {
   a.click();
 };
 
-// ⬆️ IMPORT
+// IMPORT
 const fileInput = document.getElementById("fileInput");
 
 document.getElementById("importBtn").onclick = () => fileInput.click();
