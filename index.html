@@ -186,25 +186,39 @@ recognition.onresult = (event) => {
     return;
   }
 
-  // NORMAL MODE
-  const mapped = allWords.map(w => identifiers[w] || w);
+ // 🔥 NORMAL MODE (LEVANDE)
+const mapped = allWords.map(w => identifiers[w] || w);
 
-  const current = mapped.slice(-4);
-  const previous = mapped.slice(-8, -4);
+// 🔁 dynamisk chunk
+let chunkSize = 4;
 
-  line2.textContent = current.join(" ");
-  line1.textContent = previous.join(" ");
+const lastWord = mapped[mapped.length - 1] || "";
 
-  const length = line2.textContent.length;
+// kort ord = större fokus
+if (lastWord.length <= 4) chunkSize = 2;
 
-  let size;
-  if (length <= 10) size = "14vw";
-  else if (length <= 20) size = "10vw";
-  else size = "7vw";
+// lång mening = fler ord
+if (mapped.join(" ").length > 40) chunkSize = 6;
 
-  line1.style.fontSize = size;
-  line2.style.fontSize = size;
-};
+const current = mapped.slice(-chunkSize);
+const previous = mapped.slice(-(chunkSize * 2), -chunkSize);
+
+const currentText = current.join(" ");
+const prevText = previous.join(" ");
+
+line2.textContent = currentText;
+line1.textContent = prevText;
+
+// 🔠 dynamisk font (levande)
+let size;
+
+if (currentText.length <= 10) size = "16vw";
+else if (currentText.length <= 20) size = "12vw";
+else if (currentText.length <= 35) size = "9vw";
+else size = "7vw";
+
+line2.style.fontSize = size;
+line1.style.fontSize = size;
 
 // AUTO RESTART (UTANFÖR onresult)
 recognition.onend = () => {
