@@ -6,7 +6,6 @@
 
 <title>Live Subtitles</title>
 
-<!-- PWA -->
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#000000">
@@ -76,13 +75,11 @@ const line2 = document.getElementById("line2");
 
 let identifiers = {};
 
-// SPELLING STATE
 let spellingMode = false;
 let spelledLetters = [];
 let lastProcessedText = "";
 let lastLetter = "";
 
-// SPEECH
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 const recognition = new SpeechRecognition();
 
@@ -90,7 +87,6 @@ recognition.lang = "sv-SE";
 recognition.continuous = true;
 recognition.interimResults = true;
 
-// SUPABASE
 const SUPABASE_URL = "https://smqskohuruxdagyvowge.supabase.co";
 const SUPABASE_KEY = "DIN KEY";
 
@@ -110,13 +106,11 @@ async function loadIdentifiers() {
     data.forEach(row => {
       identifiers[row.heard] = row.correct;
     });
-  } catch {
-    console.log("load error");
-  }
+  } catch {}
 }
 loadIdentifiers();
 
-// LIVE TEXT
+// LIVE
 recognition.onresult = (event) => {
   let fullText = "";
 
@@ -137,9 +131,9 @@ recognition.onresult = (event) => {
 
   // START SPELLING
   if (
-  joined.includes("dingdongstart") ||
-  joined.includes("dingdong") && joined.includes("start")
-)
+    joined.includes("dingdongstart") ||
+    (joined.includes("dingdong") && joined.includes("start"))
+  ) {
     spellingMode = true;
     spelledLetters = [];
     lastLetter = "";
@@ -150,9 +144,12 @@ recognition.onresult = (event) => {
 
   // END SPELLING
   if (
-  joined.includes("dingdongstopp") ||
-  joined.includes("dingdong") && joined.includes("stopp")
-)
+    spellingMode &&
+    (
+      joined.includes("dingdongstopp") ||
+      (joined.includes("dingdong") && joined.includes("stopp"))
+    )
+  ) {
     const name = spelledLetters.join("");
 
     identifiers[name.toLowerCase()] = name;
@@ -179,7 +176,6 @@ recognition.onresult = (event) => {
   if (spellingMode) {
     words.forEach(w => {
       const letter = w[0];
-
       if (!letter.match(/[a-zåäö]/)) return;
       if (letter === lastLetter) return;
 
@@ -192,7 +188,7 @@ recognition.onresult = (event) => {
     return;
   }
 
-  // 🔥 NORMAL MODE (LEVANDE)
+  // NORMAL MODE (LEVANDE)
   const mapped = allWords.map(w => identifiers[w] || w);
 
   let chunkSize = 4;
@@ -218,8 +214,7 @@ recognition.onresult = (event) => {
 
   line2.style.fontSize = size;
   line1.style.fontSize = size;
-
-}; // 🔥 VIKTIG FIX (stänger onresult)
+};
 
 // AUTO RESTART
 recognition.onend = () => {
