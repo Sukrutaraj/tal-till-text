@@ -136,7 +136,7 @@ recognition.onresult = (event) => {
   const joined = words.join("");
 
   // START SPELLING
-  if (joined.includes("kodstart")) {
+  if (joined.includes("börja kod")) {
     spellingMode = true;
     spelledLetters = [];
     lastLetter = "";
@@ -146,7 +146,7 @@ recognition.onresult = (event) => {
   }
 
   // END SPELLING
-  if (spellingMode && joined.includes("kodslut")) {
+  if (spellingMode && joined.includes("sluta kod")) {
     const name = spelledLetters.join("");
 
     identifiers[name.toLowerCase()] = name;
