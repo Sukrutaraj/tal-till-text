@@ -51,6 +51,7 @@ body {
 button {
   font-size: 16px;
   padding: 10px;
+  margin-right: 5px;
 }
 </style>
 </head>
@@ -64,6 +65,9 @@ button {
 
 <div id="controls">
   <button id="addBtn">＋</button>
+  <button id="exportBtn">⬇️</button>
+  <button id="importBtn">⬆️</button>
+  <input type="file" id="fileInput" hidden>
 </div>
 
 <script>
@@ -75,8 +79,8 @@ let identifiers = {};
 // 🔤 SPELLING STATE
 let spellingMode = false;
 let spelledLetters = [];
+let lastProcessedText = "";
 let lastLetter = "";
-let lastTime = 0;
 
 // 🔥 SPEECH
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -92,51 +96,49 @@ const SUPABASE_KEY = "DIN KEY";
 
 // LOAD
 async function loadIdentifiers() {
-  const res = await fetch(SUPABASE_URL + "/rest/v1/names", {
-    headers: {
-      apikey: SUPABASE_KEY,
-      Authorization: "Bearer " + SUPABASE_KEY
-    }
-  });
+  try {
+    const res = await fetch(SUPABASE_URL + "/rest/v1/names", {
+      headers: {
+        apikey: SUPABASE_KEY,
+        Authorization: "Bearer " + SUPABASE_KEY
+      }
+    });
 
-  const data = await res.json();
+    const data = await res.json();
 
-  identifiers = {};
-  data.forEach(row => {
-    identifiers[row.heard] = row.correct;
-  });
+    identifiers = {};
+    data.forEach(row => {
+      identifiers[row.heard] = row.correct;
+    });
+  } catch (e) {
+    console.log("load error");
+  }
 }
 loadIdentifiers();
 
-// 🔤 EXTRAHERA BOKSTAV
-function extractLetter(word) {
-  if (!word) return "";
-
-  // ta första bokstav
-  const letter = word[0];
-
-  if (letter.match(/[a-zåäö]/)) {
-    return letter;
-  }
-
-  return "";
-}
-
 // 🔥 LIVE
 recognition.onresult = (event) => {
-  let text = "";
+  let fullText = "";
 
-  for (let i = event.resultIndex; i < event.results.length; i++) {
-    text += event.results[i][0].transcript;
+  for (let i = 0; i < event.results.length; i++) {
+    fullText += event.results[i][0].transcript;
   }
 
-  const words = text.toLowerCase().split(" ").filter(Boolean);
+  fullText = fullText.toLowerCase().trim();
+
+  let newText = fullText.replace(lastProcessedText, "").trim();
+  if (!newText) return;
+
+  lastProcessedText = fullText;
+
+  const words = newText.split(" ").filter(Boolean);
 
   // START SPELLING
   if (words.includes("bokstavera")) {
     spellingMode = true;
     spelledLetters = [];
     lastLetter = "";
+    lastProcessedText = "";
     line2.textContent = "…";
     return;
   }
@@ -158,27 +160,24 @@ recognition.onresult = (event) => {
     });
 
     spellingMode = false;
+    lastProcessedText = "";
+
     line2.textContent = name;
     line1.textContent = "";
     return;
   }
 
-  // SPELLING MODE
+  // SPELLING MODE (FIXAD)
   if (spellingMode) {
-    const now = Date.now();
-
     words.forEach(w => {
-      const letter = extractLetter(w);
+      const letter = w[0];
 
-      if (!letter) return;
+      if (!letter.match(/[a-zåäö]/)) return;
 
-      // 🔥 ignorera spam
-      if (letter === lastLetter && now - lastTime < 300) return;
+      if (letter === lastLetter) return;
 
       spelledLetters.push(letter);
-
       lastLetter = letter;
-      lastTime = now;
     });
 
     line2.textContent = spelledLetters.join("");
@@ -186,8 +185,9 @@ recognition.onresult = (event) => {
     return;
   }
 
-  // NORMAL
-  const mapped = words.map(w => identifiers[w] || w);
+  // NORMAL MODE
+  const allWords = fullText.split(" ").filter(Boolean);
+  const mapped = allWords.map(w => identifiers[w] || w);
 
   const current = mapped.slice(-4);
   const previous = mapped.slice(-8, -4);
@@ -212,7 +212,7 @@ recognition.onend = () => recognition.start();
 // START
 recognition.start();
 
-// ADD WORD
+// ➕ ADD WORD
 document.getElementById("addBtn").onclick = async () => {
   const heard = prompt("Hur hördes ordet?");
   if (!heard) return;
@@ -233,6 +233,48 @@ document.getElementById("addBtn").onclick = async () => {
   });
 
   alert("Sparat");
+};
+
+// ⬇️ EXPORT
+document.getElementById("exportBtn").onclick = () => {
+  const blob = new Blob([JSON.stringify(identifiers, null, 2)], { type: "application/json" });
+
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "names.json";
+  a.click();
+};
+
+// ⬆️ IMPORT
+const fileInput = document.getElementById("fileInput");
+
+document.getElementById("importBtn").onclick = () => fileInput.click();
+
+fileInput.onchange = async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+
+  const text = await file.text();
+  const json = JSON.parse(text);
+
+  identifiers = { ...identifiers, ...json };
+
+  const entries = Object.entries(json).map(([heard, correct]) => ({
+    heard,
+    correct
+  }));
+
+  await fetch(SUPABASE_URL + "/rest/v1/names", {
+    method: "POST",
+    headers: {
+      apikey: SUPABASE_KEY,
+      Authorization: "Bearer " + SUPABASE_KEY,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(entries)
+  });
+
+  alert("Importerat!");
 };
 </script>
 
