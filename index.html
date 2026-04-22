@@ -6,6 +6,7 @@
 
 <title>Live Subtitles</title>
 
+<!-- PWA -->
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#000000">
@@ -50,7 +51,6 @@ body {
 button {
   font-size: 16px;
   padding: 10px;
-  margin-right: 5px;
 }
 </style>
 </head>
@@ -64,9 +64,6 @@ button {
 
 <div id="controls">
   <button id="addBtn">＋</button>
-  <button id="exportBtn">⬇️</button>
-  <button id="importBtn">⬆️</button>
-  <input type="file" id="fileInput" hidden>
 </div>
 
 <script>
@@ -75,11 +72,13 @@ const line2 = document.getElementById("line2");
 
 let identifiers = {};
 
+// 🔤 SPELLING STATE
 let spellingMode = false;
 let spelledLetters = [];
-let lastProcessedText = "";
 let lastLetter = "";
+let lastTime = 0;
 
+// 🔥 SPEECH
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 const recognition = new SpeechRecognition();
 
@@ -87,81 +86,63 @@ recognition.lang = "sv-SE";
 recognition.continuous = true;
 recognition.interimResults = true;
 
+// 🔥 SUPABASE
 const SUPABASE_URL = "https://smqskohuruxdagyvowge.supabase.co";
 const SUPABASE_KEY = "DIN KEY";
 
-// 🔤 NORMALISERA ORD
-function normalizeWord(w) {
-  w = w.toLowerCase();
-
-  if (w === "punkt") return ".";
-  if (w === "frågetecken") return "?";
-  if (w === "komma") return ",";
-  if (w === "utropstecken") return "!";
-
-  return w;
-}
-
 // LOAD
 async function loadIdentifiers() {
-  try {
-    const res = await fetch(SUPABASE_URL + "/rest/v1/names", {
-      headers: {
-        apikey: SUPABASE_KEY,
-        Authorization: "Bearer " + SUPABASE_KEY
-      }
-    });
+  const res = await fetch(SUPABASE_URL + "/rest/v1/names", {
+    headers: {
+      apikey: SUPABASE_KEY,
+      Authorization: "Bearer " + SUPABASE_KEY
+    }
+  });
 
-    const data = await res.json();
+  const data = await res.json();
 
-    identifiers = {};
-    data.forEach(row => {
-      identifiers[row.heard] = row.correct;
-    });
-  } catch {}
+  identifiers = {};
+  data.forEach(row => {
+    identifiers[row.heard] = row.correct;
+  });
 }
 loadIdentifiers();
 
-// LIVE
-recognition.onresult = (event) => {
-  let fullText = "";
+// 🔤 EXTRAHERA BOKSTAV
+function extractLetter(word) {
+  if (!word) return "";
 
-  for (let i = 0; i < event.results.length; i++) {
-    fullText += event.results[i][0].transcript;
+  // ta första bokstav
+  const letter = word[0];
+
+  if (letter.match(/[a-zåäö]/)) {
+    return letter;
   }
 
-  fullText = fullText.toLowerCase().trim();
+  return "";
+}
 
-  let newText = fullText.replace(lastProcessedText, "").trim();
-  if (!newText) return;
+// 🔥 LIVE
+recognition.onresult = (event) => {
+  let text = "";
 
-  lastProcessedText = fullText;
+  for (let i = event.resultIndex; i < event.results.length; i++) {
+    text += event.results[i][0].transcript;
+  }
 
-  const words = newText.split(" ").filter(Boolean);
-  const allWords = fullText.split(" ").filter(Boolean);
-  const joined = words.join("");
+  const words = text.toLowerCase().split(" ").filter(Boolean);
 
-  // 🔥 START SPELLING
-  if (
-    joined.includes("dingdongstart") ||
-    (joined.includes("dingdong") && joined.includes("start"))
-  ) {
+  // START SPELLING
+  if (words.includes("bokstavera")) {
     spellingMode = true;
     spelledLetters = [];
     lastLetter = "";
-    lastProcessedText = "";
     line2.textContent = "…";
     return;
   }
 
-  // 🔥 END SPELLING
-  if (
-    spellingMode &&
-    (
-      joined.includes("dingdongstopp") ||
-      (joined.includes("dingdong") && joined.includes("stopp"))
-    )
-  ) {
+  // END SPELLING
+  if (spellingMode && words.includes("klart")) {
     const name = spelledLetters.join("");
 
     identifiers[name.toLowerCase()] = name;
@@ -177,76 +158,61 @@ recognition.onresult = (event) => {
     });
 
     spellingMode = false;
-    lastProcessedText = "";
-
     line2.textContent = name;
     line1.textContent = "";
     return;
   }
 
-  // 🔤 SPELLING MODE
+  // SPELLING MODE
   if (spellingMode) {
+    const now = Date.now();
+
     words.forEach(w => {
-      const letter = w[0];
-      if (!letter.match(/[a-zåäö]/)) return;
-      if (letter === lastLetter) return;
+      const letter = extractLetter(w);
+
+      if (!letter) return;
+
+      // 🔥 ignorera spam
+      if (letter === lastLetter && now - lastTime < 300) return;
 
       spelledLetters.push(letter);
+
       lastLetter = letter;
+      lastTime = now;
     });
 
     line2.textContent = spelledLetters.join("");
-    line1.textContent = "kodläge";
+    line1.textContent = "bokstavering";
     return;
   }
 
-  // 🔥 NORMAL MODE (LEVANDE)
-  const mapped = allWords.map(w => {
-    const clean = normalizeWord(w);
-    return identifiers[clean] || clean;
-  });
+  // NORMAL
+  const mapped = words.map(w => identifiers[w] || w);
 
-  let focus = mapped.slice(-3);
+  const current = mapped.slice(-4);
+  const previous = mapped.slice(-8, -4);
 
-  if (focus.length >= 1 && focus[focus.length - 1].length <= 4) {
-    focus = [focus[focus.length - 1]];
-  }
+  line2.textContent = current.join(" ");
+  line1.textContent = previous.join(" ");
 
-  if (mapped.join(" ").length > 30) {
-    focus = mapped.slice(-3);
-  }
-
-  let text = focus.join(" ");
-
-  // snygg spacing
-  text = text
-    .replace(" .", ".")
-    .replace(" ,", ",")
-    .replace(" ?", "?")
-    .replace(" !", "!");
-
-  line2.textContent = text;
-  line1.textContent = "";
+  const length = line2.textContent.length;
 
   let size;
-  if (text.length <= 6) size = "18vw";
-  else if (text.length <= 12) size = "14vw";
-  else if (text.length <= 20) size = "10vw";
+  if (length <= 10) size = "14vw";
+  else if (length <= 20) size = "10vw";
   else size = "7vw";
 
-  line2.style.fontSize = size;
   line1.style.fontSize = size;
+  line2.style.fontSize = size;
 };
 
 // AUTO RESTART
-recognition.onend = () => {
-  recognition.start();
-};
+recognition.onend = () => recognition.start();
 
 // START
 recognition.start();
 
-// ➕ ADD WORD
+// ADD WORD
 document.getElementById("addBtn").onclick = async () => {
   const heard = prompt("Hur hördes ordet?");
   if (!heard) return;
@@ -267,50 +233,6 @@ document.getElementById("addBtn").onclick = async () => {
   });
 
   alert("Sparat");
-};
-
-// ⬇️ EXPORT
-document.getElementById("exportBtn").onclick = () => {
-  const blob = new Blob([JSON.stringify(identifiers, null, 2)], {
-    type: "application/json"
-  });
-
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob);
-  a.download = "names.json";
-  a.click();
-};
-
-// ⬆️ IMPORT
-const fileInput = document.getElementById("fileInput");
-
-document.getElementById("importBtn").onclick = () => fileInput.click();
-
-fileInput.onchange = async (e) => {
-  const file = e.target.files[0];
-  if (!file) return;
-
-  const text = await file.text();
-  const json = JSON.parse(text);
-
-  identifiers = { ...identifiers, ...json };
-
-  const entries = Object.entries(json).map(([heard, correct]) => ({
-    heard,
-    correct
-  }));
-
-  await fetch(SUPABASE_URL + "/rest/v1/names", {
-    method: "POST",
-    headers: {
-      apikey: SUPABASE_KEY,
-      Authorization: "Bearer " + SUPABASE_KEY,
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify(entries)
-  });
-
-  alert("Importerat!");
 };
 </script>
 
