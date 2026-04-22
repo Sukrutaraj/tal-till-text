@@ -45,11 +45,14 @@ body {
 const line2 = document.getElementById("line2");
 
 let identifiers = {};
-
 let lastProcessedText = "";
 
 // 🔥 MENINGSBUFFER
 let sentenceBuffer = [];
+
+// 🔥 MENINGS-ID (fixar mix-buggen)
+let currentSentenceId = 0;
+let lastSentenceId = 0;
 
 // 🔥 PAUS
 let pauseTimer = null;
@@ -67,11 +70,12 @@ function normalizeWord(w) {
   return w;
 }
 
-// 🔥 PAUS = VISA HEL MENING
+// 🔥 PAUS = VISA MENING
 function resetPauseTimer() {
   clearTimeout(pauseTimer);
 
   pauseTimer = setTimeout(() => {
+
     if (sentenceBuffer.length > 0) {
 
       let text = sentenceBuffer.join(" ");
@@ -82,16 +86,15 @@ function resetPauseTimer() {
         .replace(" ?", "?")
         .replace(" !", "!");
 
-      // 🔥 visa hela meningen
+      // 🔥 visa HELA meningen
       line2.textContent = text;
-
-      // mindre storlek för mening
       line2.style.fontSize = "8vw";
     }
 
-    // 🔥 reset
+    // 🔥 reset korrekt
     sentenceBuffer = [];
     lastProcessedText = "";
+    currentSentenceId++;   // 🔥 NY MENING
 
   }, PAUSE_LIMIT);
 }
@@ -141,6 +144,13 @@ recognition.onresult = (event) => {
 
   fullText = fullText.toLowerCase().trim();
 
+  // 🔥 IGNORERA GAMMAL BUFFER EFTER PAUS
+  if (lastSentenceId !== currentSentenceId) {
+    lastProcessedText = fullText;
+    lastSentenceId = currentSentenceId;
+    return;
+  }
+
   let newText = fullText.replace(lastProcessedText, "").trim();
   if (!newText) return;
 
@@ -148,7 +158,7 @@ recognition.onresult = (event) => {
 
   const words = newText.split(" ").filter(Boolean);
 
-  // 🔥 bygg mening
+  // 🔥 BYGG MENING
   words.forEach(w => {
     const clean = normalizeWord(w);
     const finalWord = identifiers[clean] || clean;
@@ -156,7 +166,7 @@ recognition.onresult = (event) => {
     sentenceBuffer.push(finalWord);
   });
 
-  // 🔥 LIVE VISNING (senaste ord)
+  // 🔥 LIVE (senaste ord)
   const lastWord = sentenceBuffer[sentenceBuffer.length - 1] || "";
 
   line2.textContent = lastWord;
