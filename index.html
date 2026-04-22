@@ -58,6 +58,9 @@ let spelledLetters = [];
 let lastProcessedText = "";
 let lastLetter = "";
 
+// 🔥 NY SIDA FLAGGA
+let newPage = false;
+
 // 🔥 PAUS SYSTEM
 let pauseTimer = null;
 const PAUSE_LIMIT = 1200;
@@ -66,8 +69,7 @@ function resetPauseTimer() {
   clearTimeout(pauseTimer);
 
   pauseTimer = setTimeout(() => {
-    line2.textContent = "";
-    lastProcessedText = "";
+    newPage = true;
   }, PAUSE_LIMIT);
 }
 
@@ -127,6 +129,12 @@ recognition.onresult = (event) => {
   }
 
   fullText = fullText.toLowerCase().trim();
+
+  // ✅ RÄTT ORDNING
+  if (newPage) {
+    lastProcessedText = "";
+    newPage = false;
+  }
 
   let newText = fullText.replace(lastProcessedText, "").trim();
   if (!newText) return;
