@@ -58,18 +58,20 @@ let spelledLetters = [];
 let lastProcessedText = "";
 let lastLetter = "";
 
-// 🔥 NY SIDA FLAGGA
+// 🔥 NY SIDA + CUT
 let newPage = false;
+let ignoreUntilNewSpeech = false;
 
-// 🔥 PAUS SYSTEM
+// 🔥 PAUS SYSTEM (snabbare)
 let pauseTimer = null;
-const PAUSE_LIMIT = 1200;
+const PAUSE_LIMIT = 400;
 
 function resetPauseTimer() {
   clearTimeout(pauseTimer);
 
   pauseTimer = setTimeout(() => {
     newPage = true;
+    ignoreUntilNewSpeech = true;
   }, PAUSE_LIMIT);
 }
 
@@ -130,7 +132,13 @@ recognition.onresult = (event) => {
 
   fullText = fullText.toLowerCase().trim();
 
-  // ✅ RÄTT ORDNING
+  // 🔥 CUT GAMMAL BUFFER
+  if (ignoreUntilNewSpeech) {
+    lastProcessedText = fullText;
+    ignoreUntilNewSpeech = false;
+    return;
+  }
+
   if (newPage) {
     lastProcessedText = "";
     newPage = false;
@@ -202,31 +210,28 @@ recognition.onresult = (event) => {
     return;
   }
 
-// 🔥 NORMAL MODE
-const mapped = allWords.map(w => {
-  const clean = normalizeWord(w);
-  return identifiers[clean] || clean;
-});
+  // 🔥 NORMAL MODE
+  const mapped = allWords.map(w => {
+    const clean = normalizeWord(w);
+    return identifiers[clean] || clean;
+  });
 
-let focus = mapped.slice(-3);
+  let focus = mapped.slice(-3);
+  const last = focus[focus.length - 1];
 
-const last = focus[focus.length - 1];
+  if ([".", "?", "!", ","].includes(last)) {
+    focus = mapped.slice(-5);
+  } else {
+    if (focus.length >= 1 && focus[focus.length - 1].length <= 4) {
+      focus = [focus[focus.length - 1]];
+    }
 
-// 🔥 OM interpunktion → visa mer kontext
-if ([".", "?", "!", ","].includes(last)) {
-  focus = mapped.slice(-5);
-} else {
-  // 🔥 normal fokus-logik
-  if (focus.length >= 1 && focus[focus.length - 1].length <= 4) {
-    focus = [focus[focus.length - 1]];
+    if (mapped.join(" ").length > 30) {
+      focus = mapped.slice(-3);
+    }
   }
 
-  if (mapped.join(" ").length > 30) {
-    focus = mapped.slice(-3);
-  }
-}
-
-let text = focus.join(" ");
+  let text = focus.join(" ");
 
   text = text
     .replace(" .", ".")
@@ -236,7 +241,6 @@ let text = focus.join(" ");
 
   line2.textContent = text;
 
-  // 🔠 DYNAMISK STORLEK
   let size;
   if (text.length <= 6) size = "18vw";
   else if (text.length <= 12) size = "14vw";
