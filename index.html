@@ -3,11 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
 <title>Live Subtitles</title>
-
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="theme-color" content="#000000">
 
 <style>
 body {
@@ -41,17 +37,12 @@ body {
 <script>
 const line2 = document.getElementById("line2");
 
-let identifiers = {};
-
-// 🔥 MENING
-let currentSentence = [];
-
-// 🔥 ANTI-DUPLICATE
-let lastTranscript = "";
+// 🔥 MENING (endast FINAL)
+let sentence = [];
 
 // 🔥 PAUS
 let pauseTimer = null;
-const PAUSE_LIMIT = 400;
+const PAUSE_LIMIT = 500;
 
 // 🔤 NORMALISERA
 function normalizeWord(w) {
@@ -61,16 +52,16 @@ function normalizeWord(w) {
   if (w === "frågetecken") return "?";
   if (w === "komma") return ",";
   if (w === "utropstecken") return "!";
-  if (w === "ellips" || w === "ellipsis") return "...";
+  if (w === "ellips") return "...";
 
   return w;
 }
 
 // 🔥 VISA MENING
 function handlePause() {
-  if (currentSentence.length === 0) return;
+  if (sentence.length === 0) return;
 
-  let text = currentSentence.join(" ");
+  let text = sentence.join(" ");
 
   text = text
     .replace(" .", ".")
@@ -82,9 +73,8 @@ function handlePause() {
   line2.textContent = text;
   line2.style.fontSize = "8vw";
 
-  // 🔥 RESET HELT RENT
-  currentSentence = [];
-  lastTranscript = "";
+  // 🔥 RESET
+  sentence = [];
 }
 
 // 🔁 PAUS TIMER
@@ -101,69 +91,39 @@ recognition.lang = "sv-SE";
 recognition.continuous = true;
 recognition.interimResults = true;
 
-// 🔥 SUPABASE
-const SUPABASE_URL = "https://smqskohuruxdagyvowge.supabase.co";
-const SUPABASE_KEY = "DIN KEY";
-
-// LOAD
-async function loadIdentifiers() {
-  try {
-    const res = await fetch(SUPABASE_URL + "/rest/v1/names", {
-      headers: {
-        apikey: SUPABASE_KEY,
-        Authorization: "Bearer " + SUPABASE_KEY
-      }
-    });
-
-    const data = await res.json();
-
-    identifiers = {};
-    data.forEach(row => {
-      identifiers[row.heard] = row.correct;
-    });
-  } catch {}
-}
-loadIdentifiers();
-
 // 🔥 LIVE
 recognition.onresult = (event) => {
 
   resetPauseTimer();
 
-  const result = event.results[event.resultIndex];
-  if (!result) return;
+  for (let i = event.resultIndex; i < event.results.length; i++) {
 
-  const transcript = result[0].transcript.toLowerCase().trim();
-  if (!transcript) return;
+    const result = event.results[i];
+    const transcript = result[0].transcript.toLowerCase().trim();
 
-  // 🔥 TA BORT REDAN PROCESSAD TEXT
-  let newPart = transcript.replace(lastTranscript, "").trim();
+    if (!transcript) continue;
 
-  lastTranscript = transcript;
+    const words = transcript.split(" ").filter(Boolean);
 
-  if (!newPart) return;
+    // 🔥 LIVE (ALLTID visa sista ord)
+    const lastWord = words[words.length - 1];
 
-  const words = newPart.split(" ").filter(Boolean);
+    line2.textContent = lastWord;
 
-  // 🔥 BYGG MENING
-  words.forEach(w => {
-    const clean = normalizeWord(w);
-    const finalWord = identifiers[clean] || clean;
+    let size;
+    if (lastWord.length <= 4) size = "20vw";
+    else if (lastWord.length <= 8) size = "16vw";
+    else size = "12vw";
 
-    currentSentence.push(finalWord);
-  });
+    line2.style.fontSize = size;
 
-  // 🔥 LIVE VISNING
-  const lastWord = currentSentence[currentSentence.length - 1] || "";
-
-  line2.textContent = lastWord;
-
-  let size;
-  if (lastWord.length <= 4) size = "20vw";
-  else if (lastWord.length <= 8) size = "16vw";
-  else size = "12vw";
-
-  line2.style.fontSize = size;
+    // 🔥 ENDAST FINAL → bygg mening
+    if (result.isFinal) {
+      words.forEach(w => {
+        sentence.push(normalizeWord(w));
+      });
+    }
+  }
 };
 
 // AUTO RESTART
