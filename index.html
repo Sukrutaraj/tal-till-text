@@ -5,6 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Live Subtitles</title>
 
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#000000">
+
 <style>
 body {
   margin: 0;
@@ -40,9 +43,9 @@ const line2 = document.getElementById("line2");
 // 🔥 MENING (endast FINAL)
 let sentence = [];
 
-// 🔥 PAUS
+// 🔥 PAUS (SNABBARE)
 let pauseTimer = null;
-const PAUSE_LIMIT = 500;
+const PAUSE_LIMIT = 250;
 
 // 🔤 NORMALISERA
 function normalizeWord(w) {
@@ -52,7 +55,7 @@ function normalizeWord(w) {
   if (w === "frågetecken") return "?";
   if (w === "komma") return ",";
   if (w === "utropstecken") return "!";
-  if (w === "ellips") return "...";
+  if (w === "ellips" || w === "ellipsis") return "...";
 
   return w;
 }
@@ -91,7 +94,7 @@ recognition.lang = "sv-SE";
 recognition.continuous = true;
 recognition.interimResults = true;
 
-// 🔥 LIVE
+// 🔥 LIVE + FINAL LOGIK
 recognition.onresult = (event) => {
 
   resetPauseTimer();
@@ -100,24 +103,25 @@ recognition.onresult = (event) => {
 
     const result = event.results[i];
     const transcript = result[0].transcript.toLowerCase().trim();
-
     if (!transcript) continue;
 
     const words = transcript.split(" ").filter(Boolean);
 
-    // 🔥 LIVE (ALLTID visa sista ord)
-    const lastWord = words[words.length - 1];
+    // 🔥 LIVE VISNING (normaliserad)
+    const lastWordRaw = words[words.length - 1];
+    const lastWord = normalizeWord(lastWordRaw);
 
     line2.textContent = lastWord;
 
     let size;
-    if (lastWord.length <= 4) size = "20vw";
+    if ([".", "?", "!", "..."].includes(lastWord)) size = "22vw";
+    else if (lastWord.length <= 4) size = "20vw";
     else if (lastWord.length <= 8) size = "16vw";
     else size = "12vw";
 
     line2.style.fontSize = size;
 
-    // 🔥 ENDAST FINAL → bygg mening
+    // 🔥 FINAL → bygg mening
     if (result.isFinal) {
       words.forEach(w => {
         sentence.push(normalizeWord(w));
