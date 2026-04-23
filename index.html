@@ -37,27 +37,43 @@ body {
 <script>
 const line2 = document.getElementById("line2");
 
-// 🔥 NAMN (inbyggt + variationer)
+// 🔥 NAMN (optimerad lista)
 let identifiers = {
+
+  // Deepak
   "deepak": "Deepak",
   "dipak": "Deepak",
   "depak": "Deepak",
   "de pak": "Deepak",
+  "deebak": "Deepak",
+  "dibak": "Deepak",
+  "tipak": "Deepak",
 
+  // Sukrutaraj
+  "sukrutaraj": "Sukrutaraj",
+  "sukataraj": "Sukrutaraj",
+  "sukrataraj": "Sukrutaraj",
+  "sukutaraj": "Sukrutaraj",
+  "sukra raj": "Sukrutaraj",
+  "sukra taraj": "Sukrutaraj",
   "sukrutraj": "Sukrutaraj",
-  "sukuraj": "Sukrutaraj",
-  "sukkrutarajjj": "Sukrutaraj",
+  "sukru taraj": "Sukrutaraj",
 
+  // Diabasen
   "diabasen": "Diabasen",
   "dibasen": "Diabasen",
   "dia basen": "Diabasen",
 
+  // Nilis
   "nilis": "Nilis",
   "niliss": "Nilis",
   "nillis": "Nilis",
+  "niles": "Nilis",
 
+  // Glimmern
   "glimmern": "Glimmern",
-  "glimern": "Glimmern"
+  "glimern": "Glimmern",
+  "glimren": "Glimmern"
 };
 
 // 🔥 MENING
@@ -67,23 +83,25 @@ let sentence = [];
 let pauseTimer = null;
 const PAUSE_LIMIT = 250;
 
-// 🔤 NORMALISERA + NAMN
-function normalizeWord(w) {
-  w = w.toLowerCase();
-
-  if (w === "punkt") return ".";
-  if (w === "frågetecken") return "?";
-  if (w === "komma") return ",";
-  if (w === "utropstecken") return "!";
-  if (w === "ellips") return "...";
-
-  return findBestMatch(w);
+// 🔤 LJUD-FÖRENKLING (viktig!)
+function simplify(word) {
+  return word
+    .toLowerCase()
+    .replace(/ee/g, "i")
+    .replace(/oo/g, "o")
+    .replace(/aa/g, "a")
+    .replace(/ph/g, "f")
+    .replace(/b/g, "p")
+    .replace(/d/g, "t")
+    .replace(/g/g, "k")
+    .replace(/z/g, "s")
+    .replace(/[^a-zåäö]/g, "");
 }
 
-// 🔥 FUZZY MATCH (förbättrad)
+// 🔥 SIMILARITY
 function similarity(a, b) {
-  a = a.toLowerCase();
-  b = b.toLowerCase();
+  a = simplify(a);
+  b = simplify(b);
 
   if (a === b) return 1;
 
@@ -95,6 +113,7 @@ function similarity(a, b) {
   return matches / Math.max(a.length, b.length);
 }
 
+// 🔥 MATCHNING
 function findBestMatch(word) {
   if (identifiers[word]) return identifiers[word];
 
@@ -104,13 +123,26 @@ function findBestMatch(word) {
   Object.keys(identifiers).forEach(key => {
     const score = similarity(word, key);
 
-    if (score > bestScore && score > 0.4) {
+    if (score > bestScore && score > 0.35) {
       best = identifiers[key];
       bestScore = score;
     }
   });
 
   return best;
+}
+
+// 🔤 NORMALISERA
+function normalizeWord(w) {
+  w = w.toLowerCase();
+
+  if (w === "punkt") return ".";
+  if (w === "frågetecken") return "?";
+  if (w === "komma") return ",";
+  if (w === "utropstecken") return "!";
+  if (w === "ellips") return "...";
+
+  return findBestMatch(w);
 }
 
 // 🔥 VISA MENING
@@ -172,7 +204,7 @@ recognition.onresult = (event) => {
 
     line2.style.fontSize = size;
 
-    // 🔥 FINAL
+    // 🔥 FINAL → bygg mening
     if (result.isFinal) {
       words.forEach(w => {
         sentence.push(normalizeWord(w));
