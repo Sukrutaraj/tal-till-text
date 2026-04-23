@@ -5,9 +5,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Live Subtitles</title>
 
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="theme-color" content="#000000">
-
 <style>
 body {
   margin: 0;
@@ -28,6 +25,19 @@ body {
   color: white;
   font-weight: bold;
 }
+
+/* 🔥 diskret knapp */
+#uploadBtn {
+  position: fixed;
+  bottom: 20px;
+  left: 20px;
+  font-size: 24px;
+  background: rgba(255,255,255,0.1);
+  color: white;
+  border: none;
+  padding: 10px;
+  border-radius: 50%;
+}
 </style>
 </head>
 
@@ -37,13 +47,18 @@ body {
   <div id="line2" class="line">Start</div>
 </div>
 
+<button id="uploadBtn">＋</button>
+<input type="file" id="fileInput" hidden>
+
 <script>
 const line2 = document.getElementById("line2");
 
-// 🔥 MENING (endast FINAL)
 let sentence = [];
 
-// 🔥 PAUS (SNABBARE)
+// 🔥 NAMN-DATA
+let identifiers = JSON.parse(localStorage.getItem("names") || "{}");
+
+// 🔥 PAUS
 let pauseTimer = null;
 const PAUSE_LIMIT = 250;
 
@@ -55,12 +70,36 @@ function normalizeWord(w) {
   if (w === "frågetecken") return "?";
   if (w === "komma") return ",";
   if (w === "utropstecken") return "!";
-  if (w === "ellips" || w === "ellipsis") return "...";
+  if (w === "ellips") return "...";
 
-  return w;
+  return findBestMatch(w);
 }
 
-// 🔥 VISA MENING
+// 🔥 FUZZY MATCH
+function similarity(a, b) {
+  let matches = 0;
+  for (let i = 0; i < Math.min(a.length, b.length); i++) {
+    if (a[i] === b[i]) matches++;
+  }
+  return matches / Math.max(a.length, b.length);
+}
+
+function findBestMatch(word) {
+  let best = word;
+  let bestScore = 0;
+
+  Object.keys(identifiers).forEach(key => {
+    const score = similarity(word, key);
+    if (score > bestScore && score > 0.6) {
+      best = identifiers[key];
+      bestScore = score;
+    }
+  });
+
+  return best;
+}
+
+// 🔥 PAUS → visa mening
 function handlePause() {
   if (sentence.length === 0) return;
 
@@ -76,7 +115,6 @@ function handlePause() {
   line2.textContent = text;
   line2.style.fontSize = "8vw";
 
-  // 🔥 RESET
   sentence = [];
 }
 
@@ -94,7 +132,7 @@ recognition.lang = "sv-SE";
 recognition.continuous = true;
 recognition.interimResults = true;
 
-// 🔥 LIVE + FINAL LOGIK
+// 🔥 LIVE + FINAL
 recognition.onresult = (event) => {
 
   resetPauseTimer();
@@ -107,9 +145,8 @@ recognition.onresult = (event) => {
 
     const words = transcript.split(" ").filter(Boolean);
 
-    // 🔥 LIVE VISNING (normaliserad)
-    const lastWordRaw = words[words.length - 1];
-    const lastWord = normalizeWord(lastWordRaw);
+    // 🔥 LIVE
+    const lastWord = normalizeWord(words[words.length - 1]);
 
     line2.textContent = lastWord;
 
@@ -121,7 +158,7 @@ recognition.onresult = (event) => {
 
     line2.style.fontSize = size;
 
-    // 🔥 FINAL → bygg mening
+    // 🔥 FINAL
     if (result.isFinal) {
       words.forEach(w => {
         sentence.push(normalizeWord(w));
@@ -130,11 +167,33 @@ recognition.onresult = (event) => {
   }
 };
 
-// AUTO RESTART
+// 🔁 RESTART
 recognition.onend = () => recognition.start();
-
-// START
 recognition.start();
+
+// =======================
+// 📂 UPLOAD JSON
+// =======================
+
+const fileInput = document.getElementById("fileInput");
+const uploadBtn = document.getElementById("uploadBtn");
+
+uploadBtn.onclick = () => fileInput.click();
+
+fileInput.onchange = async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+
+  const text = await file.text();
+  const json = JSON.parse(text);
+
+  identifiers = { ...identifiers, ...json };
+
+  // 🔥 SPARA
+  localStorage.setItem("names", JSON.stringify(identifiers));
+
+  alert("Namn inlästa");
+};
 </script>
 
 </body>
