@@ -25,19 +25,6 @@ body {
   color: white;
   font-weight: bold;
 }
-
-/* 🔥 diskret knapp */
-#uploadBtn {
-  position: fixed;
-  bottom: 20px;
-  left: 20px;
-  font-size: 24px;
-  background: rgba(255,255,255,0.1);
-  color: white;
-  border: none;
-  padding: 10px;
-  border-radius: 50%;
-}
 </style>
 </head>
 
@@ -47,22 +34,40 @@ body {
   <div id="line2" class="line">Start</div>
 </div>
 
-<button id="uploadBtn">＋</button>
-<input type="file" id="fileInput" hidden>
-
 <script>
 const line2 = document.getElementById("line2");
 
-let sentence = [];
+// 🔥 NAMN (inbyggt + variationer)
+let identifiers = {
+  "deepak": "Deepak",
+  "dipak": "Deepak",
+  "depak": "Deepak",
+  "de pak": "Deepak",
 
-// 🔥 NAMN-DATA
-let identifiers = JSON.parse(localStorage.getItem("names") || "{}");
+  "sukrutraj": "Sukrutaraj",
+  "sukuraj": "Sukrutaraj",
+  "sukkrutarajjj": "Sukrutaraj",
+
+  "diabasen": "Diabasen",
+  "dibasen": "Diabasen",
+  "dia basen": "Diabasen",
+
+  "nilis": "Nilis",
+  "niliss": "Nilis",
+  "nillis": "Nilis",
+
+  "glimmern": "Glimmern",
+  "glimern": "Glimmern"
+};
+
+// 🔥 MENING
+let sentence = [];
 
 // 🔥 PAUS
 let pauseTimer = null;
 const PAUSE_LIMIT = 250;
 
-// 🔤 NORMALISERA
+// 🔤 NORMALISERA + NAMN
 function normalizeWord(w) {
   w = w.toLowerCase();
 
@@ -75,22 +80,31 @@ function normalizeWord(w) {
   return findBestMatch(w);
 }
 
-// 🔥 FUZZY MATCH
+// 🔥 FUZZY MATCH (förbättrad)
 function similarity(a, b) {
+  a = a.toLowerCase();
+  b = b.toLowerCase();
+
+  if (a === b) return 1;
+
   let matches = 0;
   for (let i = 0; i < Math.min(a.length, b.length); i++) {
     if (a[i] === b[i]) matches++;
   }
+
   return matches / Math.max(a.length, b.length);
 }
 
 function findBestMatch(word) {
+  if (identifiers[word]) return identifiers[word];
+
   let best = word;
   let bestScore = 0;
 
   Object.keys(identifiers).forEach(key => {
     const score = similarity(word, key);
-    if (score > bestScore && score > 0.6) {
+
+    if (score > bestScore && score > 0.4) {
       best = identifiers[key];
       bestScore = score;
     }
@@ -99,7 +113,7 @@ function findBestMatch(word) {
   return best;
 }
 
-// 🔥 PAUS → visa mening
+// 🔥 VISA MENING
 function handlePause() {
   if (sentence.length === 0) return;
 
@@ -118,7 +132,7 @@ function handlePause() {
   sentence = [];
 }
 
-// 🔁 PAUS TIMER
+// 🔁 PAUS
 function resetPauseTimer() {
   clearTimeout(pauseTimer);
   pauseTimer = setTimeout(handlePause, PAUSE_LIMIT);
@@ -167,33 +181,11 @@ recognition.onresult = (event) => {
   }
 };
 
-// 🔁 RESTART
+// AUTO RESTART
 recognition.onend = () => recognition.start();
+
+// START
 recognition.start();
-
-// =======================
-// 📂 UPLOAD JSON
-// =======================
-
-const fileInput = document.getElementById("fileInput");
-const uploadBtn = document.getElementById("uploadBtn");
-
-uploadBtn.onclick = () => fileInput.click();
-
-fileInput.onchange = async (e) => {
-  const file = e.target.files[0];
-  if (!file) return;
-
-  const text = await file.text();
-  const json = JSON.parse(text);
-
-  identifiers = { ...identifiers, ...json };
-
-  // 🔥 SPARA
-  localStorage.setItem("names", JSON.stringify(identifiers));
-
-  alert("Namn inlästa");
-};
 </script>
 
 </body>
