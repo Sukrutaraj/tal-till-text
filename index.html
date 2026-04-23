@@ -43,8 +43,11 @@ const line2 = document.getElementById("line2");
 
 let identifiers = {};
 
-// 🔥 MENING (ENDA SANNINGEN)
+// 🔥 MENING
 let currentSentence = [];
+
+// 🔥 ANTI-DUPLICATE
+let lastTranscript = "";
 
 // 🔥 PAUS
 let pauseTimer = null;
@@ -58,12 +61,12 @@ function normalizeWord(w) {
   if (w === "frågetecken") return "?";
   if (w === "komma") return ",";
   if (w === "utropstecken") return "!";
-  if (w === "ellipsis" || w === "ellips") return "...";
+  if (w === "ellips" || w === "ellipsis") return "...";
 
   return w;
 }
 
-// 🔥 VISA HEL MENING VID PAUS
+// 🔥 VISA MENING
 function handlePause() {
   if (currentSentence.length === 0) return;
 
@@ -79,8 +82,9 @@ function handlePause() {
   line2.textContent = text;
   line2.style.fontSize = "8vw";
 
-  // 🔥 NY MENING
+  // 🔥 RESET HELT RENT
   currentSentence = [];
+  lastTranscript = "";
 }
 
 // 🔁 PAUS TIMER
@@ -121,20 +125,27 @@ async function loadIdentifiers() {
 }
 loadIdentifiers();
 
-// 🔥 LIVE (REN VERSION)
+// 🔥 LIVE
 recognition.onresult = (event) => {
 
   resetPauseTimer();
 
-  // 🔥 HÄMTA ENDAST NYTT
   const result = event.results[event.resultIndex];
   if (!result) return;
 
   const transcript = result[0].transcript.toLowerCase().trim();
   if (!transcript) return;
 
-  const words = transcript.split(" ").filter(Boolean);
+  // 🔥 TA BORT REDAN PROCESSAD TEXT
+  let newPart = transcript.replace(lastTranscript, "").trim();
 
+  lastTranscript = transcript;
+
+  if (!newPart) return;
+
+  const words = newPart.split(" ").filter(Boolean);
+
+  // 🔥 BYGG MENING
   words.forEach(w => {
     const clean = normalizeWord(w);
     const finalWord = identifiers[clean] || clean;
@@ -142,7 +153,7 @@ recognition.onresult = (event) => {
     currentSentence.push(finalWord);
   });
 
-  // 🔥 LIVE VISNING = SENASTE ORD
+  // 🔥 LIVE VISNING
   const lastWord = currentSentence[currentSentence.length - 1] || "";
 
   line2.textContent = lastWord;
