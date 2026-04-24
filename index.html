@@ -43,14 +43,11 @@ let identifiers = {
   // Deepak
   "deepak": "Deepak",
   "dipak": "Deepak",
-  "deeepak": "Deepak",
   "deebak": "Deepak",
   "dibak": "Deepak",
  
   // Sukrutaraj
   "sukrutaraj": "Sukrutaraj",
-  "sukrataraj": "Sukrutaraj",
-  "sukutaraj": "Sukrutaraj",
   "suk rut raj": "Sukrutaraj",
   "sukrutraj": "Sukrutaraj",
   "sukh rutt rajj": "Sukrutaraj",
@@ -102,9 +99,13 @@ function findBestMatch(word) {
   let bestScore = 0;
 
   Object.keys(identifiers).forEach(key => {
+
+    // 🔥 LÄNGD-FILTER (viktig!)
+    if (Math.abs(word.length - key.length) > 3) return;
+
     const score = similarity(word, key);
 
-    if (score > bestScore && score > 0.35) {
+    if (score > bestScore && score > 0.65) {
       best = identifiers[key];
       bestScore = score;
     }
