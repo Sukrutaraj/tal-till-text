@@ -5,6 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Live Subtitles</title>
 
+<!-- 🔥 CACHE FIX -->
+<meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+
 <style>
 body {
   margin: 0;
@@ -37,21 +42,18 @@ body {
 <script>
 const line2 = document.getElementById("line2");
 
-// 🔥 NAMN (optimerad lista)
+// 🔥 NAMN
 let identifiers = {
 
-  // Deepak
   "deepak": "Deepak",
   "dipak": "Deepak",
   "deebak": "Deepak",
   "dibak": "Deepak",
- 
-  // Sukrutaraj
+
   "sukrutaraj": "Sukrutaraj",
-  "suk rut raj": "Sukrutaraj",
   "sukrutraj": "Sukrutaraj",
-  "sukh rutt rajj": "Sukrutaraj",
-  
+  "sukrutara": "Sukrutaraj",
+  "sukra raj": "Sukrutaraj"
 };
 
 // 🔥 MENING
@@ -61,7 +63,20 @@ let sentence = [];
 let pauseTimer = null;
 const PAUSE_LIMIT = 200;
 
-// 🔤 LJUD-FÖRENKLING (viktig!)
+// 🔤 MERGE LETTERS (NYCKELN)
+function mergeLetters(words) {
+  if (words.length < 2) return words;
+
+  const isLetters = words.every(w => w.length === 1);
+
+  if (isLetters) {
+    return [words.join("")];
+  }
+
+  return words;
+}
+
+// 🔤 LJUD-FÖRENKLING
 function simplify(word) {
   return word
     .toLowerCase()
@@ -91,8 +106,10 @@ function similarity(a, b) {
   return matches / Math.max(a.length, b.length);
 }
 
-// 🔥 MATCHNING
+// 🔥 MATCHNING (STABIL)
 function findBestMatch(word) {
+
+  // 🔥 EXAKT MATCH ALLTID
   if (identifiers[word]) return identifiers[word];
 
   let best = word;
@@ -100,7 +117,6 @@ function findBestMatch(word) {
 
   Object.keys(identifiers).forEach(key => {
 
-    // 🔥 LÄNGD-FILTER (viktig!)
     if (Math.abs(word.length - key.length) > 3) return;
 
     const score = similarity(word, key);
@@ -171,7 +187,10 @@ recognition.onresult = (event) => {
     const transcript = result[0].transcript.toLowerCase().trim();
     if (!transcript) continue;
 
-    const words = transcript.split(" ").filter(Boolean);
+    let words = transcript.split(" ").filter(Boolean);
+
+    // 🔥 FIX: bokstavering
+    words = mergeLetters(words);
 
     // 🔥 LIVE
     const lastWord = normalizeWord(words[words.length - 1]);
@@ -186,7 +205,7 @@ recognition.onresult = (event) => {
 
     line2.style.fontSize = size;
 
-    // 🔥 FINAL → bygg mening
+    // 🔥 FINAL
     if (result.isFinal) {
       words.forEach(w => {
         sentence.push(normalizeWord(w));
