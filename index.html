@@ -2,222 +2,722 @@
 <html lang="sv">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>Live Subtitles</title>
-
-<!-- 🔥 CACHE FIX -->
 <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&display=swap" rel="stylesheet">
 
 <style>
-body {
-  margin: 0;
-  background: black;
-  height: 100dvh;
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg: #000;
+  --text: #fff;
+  --panel-bg: rgba(20, 20, 20, 0.97);
+  --panel-border: rgba(255,255,255,0.08);
+  --btn-bg: rgba(255,255,255,0.1);
+  --btn-hover: rgba(255,255,255,0.18);
+  --btn-active-bg: #fff;
+  --btn-active-text: #000;
+  --name-bg: rgba(255,255,255,0.12);
+  --name-hover: rgba(255,255,255,0.22);
+  --history-text: rgba(255,255,255,0.35);
+  --accent: #4fc3f7;
+  --danger: #ef5350;
+  --input-bg: rgba(255,255,255,0.07);
+  --input-border: rgba(255,255,255,0.15);
+}
+
+body.light {
+  --bg: #f4f4f0;
+  --text: #111;
+  --panel-bg: rgba(245,245,240,0.98);
+  --panel-border: rgba(0,0,0,0.1);
+  --btn-bg: rgba(0,0,0,0.07);
+  --btn-hover: rgba(0,0,0,0.13);
+  --btn-active-bg: #111;
+  --btn-active-text: #fff;
+  --name-bg: rgba(0,0,0,0.07);
+  --name-hover: rgba(0,0,0,0.14);
+  --history-text: rgba(0,0,0,0.3);
+  --accent: #0277bd;
+  --danger: #c62828;
+  --input-bg: rgba(0,0,0,0.05);
+  --input-border: rgba(0,0,0,0.15);
+}
+
+html, body {
+  width: 100%; height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Atkinson Hyperlegible', sans-serif;
+  overflow: hidden;
+  transition: background 0.3s, color 0.3s;
+  touch-action: manipulation;
+}
+
+/* ── MAIN DISPLAY ── */
+#display {
+  position: fixed;
+  inset: 0;
   display: flex;
+  flex-direction: column;
   justify-content: center;
   align-items: center;
-  font-family: sans-serif;
+  padding: 24px;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
-#container {
-  width: 90vw;
+#history {
+  width: 100%;
   text-align: center;
+  margin-bottom: 16px;
+  min-height: 60px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  justify-content: flex-end;
 }
 
-.line {
-  color: white;
-  font-weight: bold;
+.history-line {
+  color: var(--history-text);
+  font-size: 4.5vw;
+  line-height: 1.3;
+  transition: color 0.3s;
+  font-weight: 400;
+}
+
+#live-word {
+  color: var(--text);
+  font-weight: 700;
+  text-align: center;
+  line-height: 1.1;
+  transition: font-size 0.15s ease, color 0.3s;
+  word-break: break-word;
+  width: 100%;
+  min-height: 15vw;
+}
+
+/* ── PANEL OVERLAY ── */
+#panel-overlay {
+  position: fixed;
+  inset: 0;
+  background: transparent;
+  z-index: 10;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.25s ease;
+}
+
+#panel-overlay.visible {
+  opacity: 1;
+  pointer-events: all;
+}
+
+/* ── PANEL ── */
+#panel {
+  position: fixed;
+  bottom: 0;
+  left: 0; right: 0;
+  background: var(--panel-bg);
+  border-top: 1px solid var(--panel-border);
+  border-radius: 20px 20px 0 0;
+  padding: 20px 20px 32px;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  transform: translateY(100%);
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), background 0.3s;
+  max-height: 70vh;
+  overflow-y: auto;
+  z-index: 11;
+}
+
+#panel-overlay.visible #panel {
+  transform: translateY(0);
+}
+
+/* Drag handle */
+.drag-handle {
+  width: 40px; height: 4px;
+  background: var(--panel-border);
+  border-radius: 2px;
+  margin: 0 auto 18px;
+}
+
+/* ── PANEL SECTIONS ── */
+.panel-section {
+  margin-bottom: 18px;
+}
+
+.panel-label {
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--history-text);
+  margin-bottom: 10px;
+  font-weight: 700;
+}
+
+/* ── BUTTONS ROW ── */
+.btn-row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.icon-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background: var(--btn-bg);
+  border: 1px solid var(--panel-border);
+  border-radius: 12px;
+  color: var(--text);
+  font-family: 'Atkinson Hyperlegible', sans-serif;
+  font-size: 15px;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.1s;
+  white-space: nowrap;
+}
+
+.icon-btn:active { transform: scale(0.95); }
+.icon-btn:hover  { background: var(--btn-hover); }
+
+.icon-btn.active {
+  background: var(--btn-active-bg);
+  color: var(--btn-active-text);
+  border-color: transparent;
+}
+
+/* ── NAME BUTTONS ── */
+#name-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.name-btn {
+  padding: 10px 18px;
+  background: var(--name-bg);
+  border: 1px solid var(--panel-border);
+  border-radius: 50px;
+  color: var(--text);
+  font-family: 'Atkinson Hyperlegible', sans-serif;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.1s;
+}
+
+.name-btn:active  { transform: scale(0.93); }
+.name-btn:hover   { background: var(--name-hover); }
+
+.name-btn .del {
+  margin-left: 6px;
+  opacity: 0.4;
+  font-size: 13px;
+}
+
+/* ── ADD NAME ── */
+.add-name-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.add-name-row input {
+  flex: 1;
+  padding: 10px 14px;
+  background: var(--input-bg);
+  border: 1px solid var(--input-border);
+  border-radius: 12px;
+  color: var(--text);
+  font-family: 'Atkinson Hyperlegible', sans-serif;
+  font-size: 15px;
+  outline: none;
+}
+
+.add-name-row input::placeholder { opacity: 0.4; }
+
+.add-name-row button {
+  padding: 10px 16px;
+  background: var(--accent);
+  border: none;
+  border-radius: 12px;
+  color: #fff;
+  font-size: 20px;
+  cursor: pointer;
+  transition: opacity 0.15s, transform 0.1s;
+}
+
+.add-name-row button:active { transform: scale(0.93); opacity: 0.8; }
+
+/* ── COUNTDOWN BAR ── */
+#countdown-bar {
+  position: fixed;
+  bottom: 0; left: 0;
+  height: 3px;
+  background: var(--accent);
+  width: 0%;
+  transition: none;
+  z-index: 20;
+  opacity: 0;
+}
+
+/* ── LANG INDICATOR ── */
+#lang-indicator {
+  position: fixed;
+  top: 16px; right: 16px;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  color: var(--history-text);
+  text-transform: uppercase;
+  pointer-events: none;
+  transition: color 0.3s;
 }
 </style>
 </head>
-
 <body>
 
-<div id="container">
-  <div id="line2" class="line">Start</div>
+<div id="lang-indicator">SV</div>
+
+<!-- MAIN -->
+<div id="display">
+  <div id="history"></div>
+  <div id="live-word">Tryck för att börja</div>
 </div>
 
+<!-- PANEL OVERLAY (tap anywhere to dismiss) -->
+<div id="panel-overlay" onclick="handleOverlayClick(event)">
+  <div id="panel" onclick="event.stopPropagation()">
+    <div class="drag-handle"></div>
+
+    <!-- SETTINGS -->
+    <div class="panel-section">
+      <div class="panel-label">Inställningar</div>
+      <div class="btn-row">
+
+        <button class="icon-btn" id="mode-btn" onclick="toggleMode()">
+          <span id="mode-icon">☀️</span>
+          <span id="mode-label">Ljust läge</span>
+        </button>
+
+        <button class="icon-btn" id="lang-btn" onclick="toggleLang()">
+          <span>🌐</span>
+          <span id="lang-label">English</span>
+        </button>
+
+        <button class="icon-btn" onclick="clearHistory()">
+          <span>🗑</span>
+          <span>Rensa historik</span>
+        </button>
+
+      </div>
+    </div>
+
+    <!-- NAMES -->
+    <div class="panel-section">
+      <div class="panel-label">Namn – tryck för att visa på skärmen</div>
+      <div id="name-buttons"></div>
+      <div class="add-name-row">
+        <input id="name-input" placeholder="Lägg till namn..." maxlength="30"
+          onkeydown="if(event.key==='Enter') addName()">
+        <button onclick="addName()">＋</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- COUNTDOWN BAR -->
+<div id="countdown-bar"></div>
+
 <script>
-const line2 = document.getElementById("line2");
+/* ══════════════════════════════════════════
+   STATE
+══════════════════════════════════════════ */
+let isDark      = true;
+let currentLang = "sv-SE";
+let sentence    = [];
+let historyLines = [];
+let panelOpen   = false;
+let panelTimer  = null;
+let countdownAnim = null;
+const PANEL_DURATION = 5000; // ms
 
-// 🔥 NAMN
-let identifiers = {
+// Name storage: { displayName: string, variants: string[] }
+let names = JSON.parse(localStorage.getItem("subtitle_names") || "[]");
 
-  "deepak": "Deepak",
-  "dipak": "Deepak",
-  "deebak": "Deepak",
-  "dibak": "Deepak",
+/* ══════════════════════════════════════════
+   ELEMENTS
+══════════════════════════════════════════ */
+const liveWord      = document.getElementById("live-word");
+const historyEl     = document.getElementById("history");
+const panelOverlay  = document.getElementById("panel-overlay");
+const modeBtn       = document.getElementById("mode-btn");
+const modeIcon      = document.getElementById("mode-icon");
+const modeLabel     = document.getElementById("mode-label");
+const langBtn       = document.getElementById("lang-btn");
+const langLabel     = document.getElementById("lang-label");
+const langIndicator = document.getElementById("lang-indicator");
+const nameInput     = document.getElementById("name-input");
+const nameButtons   = document.getElementById("name-buttons");
+const countdownBar  = document.getElementById("countdown-bar");
 
-  "sukrutaraj": "Sukrutaraj",
-  "sukrutraj": "Sukrutaraj",
-  "sukrutara": "Sukrutaraj",
-  "sukra raj": "Sukrutaraj"
-};
+/* ══════════════════════════════════════════
+   PANEL
+══════════════════════════════════════════ */
+document.getElementById("display").addEventListener("click", () => {
+  if (!panelOpen) openPanel();
+});
 
-// 🔥 MENING
-let sentence = [];
-
-// 🔥 PAUS
-let pauseTimer = null;
-const PAUSE_LIMIT = 200;
-
-// 🔤 MERGE LETTERS (NYCKELN)
-function mergeLetters(words) {
-  if (words.length < 2) return words;
-
-  const isLetters = words.every(w => w.length === 1);
-
-  if (isLetters) {
-    return [words.join("")];
-  }
-
-  return words;
+function openPanel() {
+  panelOpen = true;
+  panelOverlay.classList.add("visible");
+  startCountdown();
 }
 
-// 🔤 LJUD-FÖRENKLING
+function closePanel() {
+  panelOpen = false;
+  panelOverlay.classList.remove("visible");
+  stopCountdown();
+}
+
+function handleOverlayClick(e) {
+  if (e.target === panelOverlay) closePanel();
+}
+
+function startCountdown() {
+  stopCountdown();
+  countdownBar.style.transition = "none";
+  countdownBar.style.width = "100%";
+  countdownBar.style.opacity = "1";
+
+  // Force reflow
+  countdownBar.getBoundingClientRect();
+
+  countdownBar.style.transition = `width ${PANEL_DURATION}ms linear`;
+  countdownBar.style.width = "0%";
+
+  panelTimer = setTimeout(() => {
+    closePanel();
+    countdownBar.style.opacity = "0";
+  }, PANEL_DURATION);
+}
+
+function stopCountdown() {
+  clearTimeout(panelTimer);
+  countdownBar.style.transition = "none";
+  countdownBar.style.width = "0%";
+  countdownBar.style.opacity = "0";
+}
+
+// Reset timer when user interacts with panel
+document.getElementById("panel").addEventListener("click", () => {
+  startCountdown();
+});
+
+/* ══════════════════════════════════════════
+   MODE
+══════════════════════════════════════════ */
+function toggleMode() {
+  isDark = !isDark;
+  document.body.classList.toggle("light", !isDark);
+  modeIcon.textContent  = isDark ? "☀️" : "🌙";
+  modeLabel.textContent = isDark ? "Ljust läge" : "Mörkt läge";
+  startCountdown();
+}
+
+/* ══════════════════════════════════════════
+   LANGUAGE
+══════════════════════════════════════════ */
+function toggleLang() {
+  currentLang = currentLang === "sv-SE" ? "en-US" : "sv-SE";
+  const isSv = currentLang === "sv-SE";
+
+  langLabel.textContent     = isSv ? "English" : "Svenska";
+  langIndicator.textContent = isSv ? "SV" : "EN";
+
+  // Update UI strings
+  document.getElementById("name-input").placeholder =
+    isSv ? "Lägg till namn..." : "Add name...";
+  document.querySelector(".panel-label").textContent =
+    isSv ? "Inställningar" : "Settings";
+
+  restartRecognition();
+  startCountdown();
+}
+
+/* ══════════════════════════════════════════
+   NAMES
+══════════════════════════════════════════ */
+function saveNames() {
+  localStorage.setItem("subtitle_names", JSON.stringify(names));
+}
+
+function addName() {
+  const raw = nameInput.value.trim();
+  if (!raw) return;
+
+  // Capitalize first letter
+  const display = raw.charAt(0).toUpperCase() + raw.slice(1);
+
+  // Avoid duplicates
+  if (names.find(n => n.display.toLowerCase() === display.toLowerCase())) {
+    nameInput.value = "";
+    return;
+  }
+
+  names.push({ display, variants: generateVariants(display) });
+  saveNames();
+  renderNames();
+  nameInput.value = "";
+  startCountdown();
+}
+
+function removeName(display) {
+  names = names.filter(n => n.display !== display);
+  saveNames();
+  renderNames();
+  startCountdown();
+}
+
+function showName(display) {
+  liveWord.textContent  = display;
+  liveWord.style.fontSize = display.length <= 6 ? "20vw" : display.length <= 10 ? "15vw" : "11vw";
+  closePanel();
+}
+
+function renderNames() {
+  nameButtons.innerHTML = "";
+  names.forEach(n => {
+    const btn = document.createElement("button");
+    btn.className = "name-btn";
+    btn.innerHTML = n.display + '<span class="del" onclick="event.stopPropagation();removeName(\'' + n.display + '\')">✕</span>';
+    btn.onclick = () => showName(n.display);
+    nameButtons.appendChild(btn);
+  });
+}
+
+// Generate phonetic variants for a name
+function generateVariants(name) {
+  const base = name.toLowerCase();
+  const variants = [base];
+
+  // Simple phonetic alternates
+  const maps = [
+    [/ee/g,"i"],[/oo/g,"u"],[/aa/g,"a"],[/ph/g,"f"],
+    [/ck/g,"k"],[/sch/g,"sh"],[/tch/g,"ch"],[/qu/g,"kv"],
+    [/aj/g,"ai"],[/ej/g,"ei"],[/j/g,"y"],[/w/g,"v"]
+  ];
+
+  let simplified = base;
+  maps.forEach(([from,to]) => { simplified = simplified.replace(from, to); });
+  if (simplified !== base) variants.push(simplified);
+
+  // Without last vowel (common Swedish speech recognition drop)
+  const noEndVowel = base.replace(/[aeiouåäö]$/, "");
+  if (noEndVowel !== base) variants.push(noEndVowel);
+
+  return [...new Set(variants)];
+}
+
+/* ══════════════════════════════════════════
+   HISTORY
+══════════════════════════════════════════ */
+function addToHistory(text) {
+  if (!text.trim()) return;
+  historyLines.push(text);
+  if (historyLines.length > 3) historyLines.shift();
+  renderHistory();
+}
+
+function renderHistory() {
+  historyEl.innerHTML = historyLines
+    .map(l => `<div class="history-line">${l}</div>`)
+    .join("");
+}
+
+function clearHistory() {
+  historyLines = [];
+  renderHistory();
+  startCountdown();
+}
+
+/* ══════════════════════════════════════════
+   SPEECH RECOGNITION
+══════════════════════════════════════════ */
+const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+let recognition = null;
+let pauseTimer  = null;
+const PAUSE_LIMIT = 220;
+
+function buildRecognition() {
+  if (recognition) {
+    try { recognition.stop(); } catch(e) {}
+  }
+
+  recognition = new SpeechRecognition();
+  recognition.lang = currentLang;
+  recognition.continuous = true;
+  recognition.interimResults = true;
+
+  recognition.onresult = handleResult;
+  recognition.onend    = () => { try { recognition.start(); } catch(e) {} };
+  recognition.onerror  = (e) => { if (e.error !== "aborted") { setTimeout(restartRecognition, 500); } };
+}
+
+function restartRecognition() {
+  buildRecognition();
+  try { recognition.start(); } catch(e) {}
+  liveWord.textContent  = currentLang === "sv-SE" ? "Lyssnar..." : "Listening...";
+  liveWord.style.fontSize = "8vw";
+}
+
+/* ══════════════════════════════════════════
+   NAME MATCHING
+══════════════════════════════════════════ */
 function simplify(word) {
   return word
     .toLowerCase()
-    .replace(/ee/g, "i")
-    .replace(/oo/g, "o")
-    .replace(/aa/g, "a")
-    .replace(/ph/g, "f")
-    .replace(/b/g, "p")
-    .replace(/d/g, "t")
-    .replace(/g/g, "k")
-    .replace(/z/g, "s")
-    .replace(/[^a-zåäö]/g, "");
+    .replace(/ee/g,"i").replace(/oo/g,"o").replace(/aa/g,"a")
+    .replace(/ph/g,"f").replace(/b/g,"p").replace(/d/g,"t")
+    .replace(/g/g,"k").replace(/z/g,"s")
+    .replace(/[^a-zåäö]/g,"");
 }
 
-// 🔥 SIMILARITY
 function similarity(a, b) {
-  a = simplify(a);
-  b = simplify(b);
-
+  a = simplify(a); b = simplify(b);
   if (a === b) return 1;
-
   let matches = 0;
   for (let i = 0; i < Math.min(a.length, b.length); i++) {
     if (a[i] === b[i]) matches++;
   }
-
   return matches / Math.max(a.length, b.length);
 }
 
-// 🔥 MATCHNING (STABIL)
-function findBestMatch(word) {
+function findNameMatch(word) {
+  const w = word.toLowerCase();
 
-  // 🔥 EXAKT MATCH ALLTID
-  if (identifiers[word]) return identifiers[word];
-
-  let best = word;
-  let bestScore = 0;
-
-  Object.keys(identifiers).forEach(key => {
-
-    if (Math.abs(word.length - key.length) > 3) return;
-
-    const score = similarity(word, key);
-
-    if (score > bestScore && score > 0.65) {
-      best = identifiers[key];
-      bestScore = score;
+  for (const n of names) {
+    // Exact match against any variant
+    if (n.variants.includes(w)) return n.display;
+    // Fuzzy match
+    for (const v of n.variants) {
+      if (Math.abs(w.length - v.length) <= 3 && similarity(w, v) > 0.70) {
+        return n.display;
+      }
     }
-  });
-
-  return best;
+  }
+  return null;
 }
 
-// 🔤 NORMALISERA
+/* ══════════════════════════════════════════
+   NORMALIZATION
+══════════════════════════════════════════ */
+const FILLER_WORDS = new Set(["öh","eh","hmm","uhm","uh","eeh","ahh","mm"]);
+
 function normalizeWord(w) {
-  w = w.toLowerCase();
+  w = w.toLowerCase().trim();
+  if (FILLER_WORDS.has(w)) return null;
 
-  if (w === "punkt") return ".";
-  if (w === "frågetecken") return "?";
-  if (w === "komma") return ",";
-  if (w === "utropstecken") return "!";
-  if (w === "ellips") return "...";
+  // Punctuation commands
+  const punct = {
+    "punkt":".", "frågetecken":"?", "komma":",",
+    "utropstecken":"!", "ellips":"...",
+    "period":".", "question mark":"?", "exclamation":"!"
+  };
+  if (punct[w]) return punct[w];
 
-  return findBestMatch(w);
+  // Name match
+  const nameMatch = findNameMatch(w);
+  if (nameMatch) return nameMatch;
+
+  return w;
 }
 
-// 🔥 VISA MENING
-function handlePause() {
-  if (sentence.length === 0) return;
-
-  let text = sentence.join(" ");
-
-  text = text
-    .replace(" .", ".")
-    .replace(" ,", ",")
-    .replace(" ?", "?")
-    .replace(" !", "!")
-    .replace(" ...", "...");
-
-  line2.textContent = text;
-  line2.style.fontSize = "8vw";
-
-  sentence = [];
+function mergeLetters(words) {
+  if (words.length < 2) return words;
+  if (words.every(w => w.length === 1)) return [words.join("")];
+  return words;
 }
 
-// 🔁 PAUS
+/* ══════════════════════════════════════════
+   RESULT HANDLER
+══════════════════════════════════════════ */
+function handleResult(event) {
+  resetPauseTimer();
+
+  for (let i = event.resultIndex; i < event.results.length; i++) {
+    const result     = event.results[i];
+    const transcript = result[0].transcript.toLowerCase().trim();
+    if (!transcript) continue;
+
+    let words = transcript.split(" ").filter(Boolean);
+    words = mergeLetters(words);
+
+    // Show last meaningful word live
+    const lastRaw  = words[words.length - 1];
+    const lastWord = normalizeWord(lastRaw) || lastRaw;
+
+    liveWord.textContent = lastWord;
+
+    const len = lastWord.length;
+    let size;
+    if ([".", "?", "!", "..."].includes(lastWord)) size = "22vw";
+    else if (len <= 4)  size = "20vw";
+    else if (len <= 8)  size = "16vw";
+    else if (len <= 12) size = "12vw";
+    else                size = "9vw";
+    liveWord.style.fontSize = size;
+
+    // Accumulate finals into sentence
+    if (result.isFinal) {
+      words.forEach(w => {
+        const norm = normalizeWord(w);
+        if (norm) sentence.push(norm);
+      });
+    }
+  }
+}
+
+/* ══════════════════════════════════════════
+   PAUSE → BUILD SENTENCE
+══════════════════════════════════════════ */
 function resetPauseTimer() {
   clearTimeout(pauseTimer);
   pauseTimer = setTimeout(handlePause, PAUSE_LIMIT);
 }
 
-// 🔥 SPEECH
-const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-const recognition = new SpeechRecognition();
+function handlePause() {
+  if (sentence.length === 0) return;
 
-recognition.lang = "sv-SE";
-recognition.continuous = true;
-recognition.interimResults = true;
+  let text = sentence.join(" ")
+    .replace(/ \./g,".").replace(/ ,/g,",")
+    .replace(/ \?/g,"?").replace(/ !/g,"!")
+    .replace(/ \.\.\./g,"...");
 
-// 🔥 LIVE + FINAL
-recognition.onresult = (event) => {
+  // Capitalize first letter
+  text = text.charAt(0).toUpperCase() + text.slice(1);
 
-  resetPauseTimer();
+  liveWord.textContent  = text;
+  liveWord.style.fontSize = text.length < 20 ? "8vw" : text.length < 40 ? "6vw" : "4.5vw";
 
-  for (let i = event.resultIndex; i < event.results.length; i++) {
+  addToHistory(text);
+  sentence = [];
+}
 
-    const result = event.results[i];
-    const transcript = result[0].transcript.toLowerCase().trim();
-    if (!transcript) continue;
-
-    let words = transcript.split(" ").filter(Boolean);
-
-    // 🔥 FIX: bokstavering
-    words = mergeLetters(words);
-
-    // 🔥 LIVE
-    const lastWord = normalizeWord(words[words.length - 1]);
-
-    line2.textContent = lastWord;
-
-    let size;
-    if ([".", "?", "!", "..."].includes(lastWord)) size = "22vw";
-    else if (lastWord.length <= 4) size = "20vw";
-    else if (lastWord.length <= 8) size = "16vw";
-    else size = "12vw";
-
-    line2.style.fontSize = size;
-
-    // 🔥 FINAL
-    if (result.isFinal) {
-      words.forEach(w => {
-        sentence.push(normalizeWord(w));
-      });
-    }
-  }
-};
-
-// AUTO RESTART
-recognition.onend = () => recognition.start();
-
-// START
+/* ══════════════════════════════════════════
+   INIT
+══════════════════════════════════════════ */
+renderNames();
+buildRecognition();
 recognition.start();
 </script>
 
