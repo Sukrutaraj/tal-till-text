@@ -518,7 +518,7 @@ function addName() {
 
 /* ── LÄR IN UTTAL (fånga hur din röst låter för motorn) ── */
 function startLearning(display) {
-  if (!SpeechRecognition || isIOS) { showUnsupported(); return; }
+  if (!SpeechRecognition) { showUnsupported(); return; }
   if (!started) startListening();
   learningName = display;
   learnCaptures = [];
@@ -650,7 +650,7 @@ let recognition = null;
 let pauseTimer  = null;
 const PAUSE_LIMIT = 220;
 
-// iOS-webbläsare (även "Chrome" på iPhone) saknar röstigenkänning
+// iPhone/iPad – används bara för att ge ett hjälpsammare meddelande, INTE för att blockera
 const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
               (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 
@@ -659,25 +659,25 @@ function setBigText(text, vw) {
   liveWord.style.fontSize = vw || "7vw";
 }
 
-// Visas om webbläsaren inte klarar röstigenkänning
+// Visas ENDAST om röstigenkänning faktiskt saknas i webbläsaren
 function showUnsupported() {
   const sv = currentLang === "sv-SE";
   if (isIOS) {
     setBigText(sv
-      ? "iPhone och iPad kan tyvärr inte göra röstigenkänning i webbläsaren. Öppna länken på en Android-telefon eller en dator med Chrome."
-      : "iPhone and iPad can't do speech recognition in the browser. Open the link on an Android phone or a computer with Chrome.",
-      "5vw");
+      ? "Öppna länken i Safari på din iPhone (kräver iOS 14.5 eller senare). Andra webbläsare på iPhone stöder tyvärr inte röstigenkänning."
+      : "Open the link in Safari on your iPhone (needs iOS 14.5+). Other iPhone browsers don't support speech recognition.",
+      "4.5vw");
   } else {
     setBigText(sv
-      ? "Den här webbläsaren stöder inte röstigenkänning. Prova Chrome eller Edge."
-      : "This browser doesn't support speech recognition. Try Chrome or Edge.",
+      ? "Den här webbläsaren stöder inte röstigenkänning. Prova Chrome, Edge eller Safari."
+      : "This browser doesn't support speech recognition. Try Chrome, Edge or Safari.",
       "5vw");
   }
 }
 
 // Startar mikrofonen – MÅSTE ske efter ett tryck (krav på mobil)
 function startListening() {
-  if (!SpeechRecognition || isIOS) { showUnsupported(); return; }
+  if (!SpeechRecognition) { showUnsupported(); return; }
   started = true;
   buildRecognition();
   try { recognition.start(); } catch (e) {}
@@ -943,7 +943,7 @@ saveNames();
 renderNames();
 
 // Starta INTE automatiskt – mobilen kräver ett tryck. Visa rätt startläge.
-if (!SpeechRecognition || isIOS) {
+if (!SpeechRecognition) {
   showUnsupported();
 } else {
   setBigText(currentLang === "sv-SE" ? "Tryck för att börja" : "Tap to start", "9vw");
