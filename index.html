@@ -224,6 +224,34 @@ html, body {
   font-size: 13px;
 }
 
+/* ── NAME ROWS (name + learn + delete) ── */
+.name-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.name-row .name-btn { flex: 1; text-align: left; }
+.name-learn, .name-del {
+  width: 40px; height: 40px;
+  border-radius: 50%;
+  border: 1px solid var(--panel-border);
+  background: var(--name-bg);
+  color: var(--text);
+  font-size: 16px;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.1s;
+  flex: 0 0 auto;
+}
+.name-learn:active, .name-del:active { transform: scale(0.9); }
+.name-learn:hover  { background: var(--name-hover); }
+.name-del:hover    { background: #e5393533; border-color: #e53935; }
+.name-hint {
+  margin-top: 10px;
+  font-size: 13px;
+  opacity: 0.6;
+  line-height: 1.4;
+}
+
 /* ── ADD NAME ── */
 .add-name-row {
   display: flex;
@@ -330,6 +358,7 @@ html, body {
           onkeydown="if(event.key==='Enter') addName()">
         <button onclick="addName()">＋</button>
       </div>
+      <div class="name-hint">Tips: tryck 🎤 vid ett namn och säg det ett par gånger, så lär sig verktyget hur just din röst låter. ✓ visar att ett namn är inlärt.</div>
     </div>
 
   </div>
@@ -349,10 +378,14 @@ let historyLines = [];
 let panelOpen   = false;
 let panelTimer  = null;
 let countdownAnim = null;
+let started     = false;   // har användaren startat mikrofonen?
+let learningName = null;   // namn som just nu lärs in via rösten
+let learnCaptures = [];    // det motorn hört under inlärning
 const PANEL_DURATION = 5000; // ms
 
-// Name storage: { displayName: string, variants: string[] }
+// Namnlagring: { display, variants:[], learned:[] }  (learned = riktiga uttal från din röst)
 let names = JSON.parse(localStorage.getItem("subtitle_names") || "[]");
+names = names.map(n => ({ display: n.display, variants: n.variants || [], learned: n.learned || [] }));
 
 /* ══════════════════════════════════════════
    ELEMENTS
@@ -374,7 +407,9 @@ const countdownBar  = document.getElementById("countdown-bar");
    PANEL
 ══════════════════════════════════════════ */
 document.getElementById("display").addEventListener("click", () => {
-  if (!panelOpen) openPanel();
+  if (!started) { startListening(); return; }        // första trycket startar mikrofonen
+  if (learningName) { saveLearning(); return; }      // under inlärning: tryck sparar
+  if (!panelOpen) openPanel();                        // annars öppnar tryck inställningarna
 });
 
 function openPanel() {
@@ -474,11 +509,49 @@ function addName() {
     return;
   }
 
-  names.push({ display, variants: generateVariants(display) });
+  names.push({ display, variants: generateVariants(display), learned: [] });
   saveNames();
   renderNames();
   nameInput.value = "";
   startCountdown();
+}
+
+/* ── LÄR IN UTTAL (fånga hur din röst låter för motorn) ── */
+function startLearning(display) {
+  if (!SpeechRecognition || isIOS) { showUnsupported(); return; }
+  if (!started) startListening();
+  learningName = display;
+  learnCaptures = [];
+  closePanel();
+  showLearnStatus();
+}
+
+function showLearnStatus() {
+  const heard = learnCaptures.length ? learnCaptures[learnCaptures.length - 1] : "…";
+  setBigText('Säg "' + learningName + '" ett par gånger  ·  hört: ' + heard +
+             '  ·  tryck för att spara (' + learnCaptures.length + ')', "3.5vw");
+}
+
+function saveLearning() {
+  const n = names.find(x => x.display === learningName);
+  let added = 0;
+  if (n) {
+    learnCaptures.forEach(cap => {
+      const joined = normPhrase(cap);                 // hela frasen utan mellanslag
+      if (joined.length >= 2 && !n.learned.includes(joined)) { n.learned.push(joined); added++; }
+      cap.trim().split(/\s+/).forEach(part => {        // även varje delord
+        const p = normPhrase(part);
+        if (p.length >= 3 && !n.learned.includes(p)) { n.learned.push(p); added++; }
+      });
+    });
+    saveNames();
+    renderNames();
+  }
+  const name = learningName;
+  learningName = null;
+  learnCaptures = [];
+  setBigText(added ? '"' + name + '" inlärt! (' + added + ' uttal sparade)'
+                   : "Inget hördes – tryck 🎤 och försök igen", "7vw");
 }
 
 function removeName(display) {
@@ -497,35 +570,54 @@ function showName(display) {
 function renderNames() {
   nameButtons.innerHTML = "";
   names.forEach(n => {
+    const row = document.createElement("div");
+    row.className = "name-row";
+
     const btn = document.createElement("button");
     btn.className = "name-btn";
-    btn.innerHTML = n.display + '<span class="del" onclick="event.stopPropagation();removeName(\'' + n.display + '\')">✕</span>';
+    btn.textContent = n.display + (n.learned && n.learned.length ? " ✓" : "");
     btn.onclick = () => showName(n.display);
-    nameButtons.appendChild(btn);
+
+    const learn = document.createElement("button");
+    learn.className = "name-learn";
+    learn.textContent = "🎤";
+    learn.title = "Lär in uttal";
+    learn.onclick = (e) => { e.stopPropagation(); startLearning(n.display); };
+
+    const del = document.createElement("button");
+    del.className = "name-del";
+    del.textContent = "✕";
+    del.title = "Ta bort";
+    del.onclick = (e) => { e.stopPropagation(); removeName(n.display); };
+
+    row.append(btn, learn, del);
+    nameButtons.appendChild(row);
   });
 }
 
 // Generate phonetic variants for a name
 function generateVariants(name) {
-  const base = name.toLowerCase();
-  const variants = [base];
+  const base = name.toLowerCase().trim();
+  const set = new Set([base]);
 
-  // Simple phonetic alternates
+  // Fonetiska alternativ (svensk röstmotor hör utländska namn annorlunda)
   const maps = [
     [/ee/g,"i"],[/oo/g,"u"],[/aa/g,"a"],[/ph/g,"f"],
     [/ck/g,"k"],[/sch/g,"sh"],[/tch/g,"ch"],[/qu/g,"kv"],
-    [/aj/g,"ai"],[/ej/g,"ei"],[/j/g,"y"],[/w/g,"v"]
+    [/aj/g,"ai"],[/ej/g,"ei"],[/j/g,"y"],[/w/g,"v"],
+    [/c/g,"k"],[/x/g,"ks"],[/z/g,"s"],[/th/g,"t"],
+    [/ea/g,"i"],[/ou/g,"u"],[/dt/g,"t"]
   ];
-
   let simplified = base;
   maps.forEach(([from,to]) => { simplified = simplified.replace(from, to); });
-  if (simplified !== base) variants.push(simplified);
+  set.add(simplified);
 
-  // Without last vowel (common Swedish speech recognition drop)
-  const noEndVowel = base.replace(/[aeiouåäö]$/, "");
-  if (noEndVowel !== base) variants.push(noEndVowel);
+  // Vanliga uttalsvarianter
+  set.add(base.replace(/[aeiouåäö]$/, ""));       // utan slutvokal
+  set.add(base.replace(/(.)\1/g, "$1"));          // utan dubbelbokstäver
+  set.add(simplify(base));                         // grov fonetisk reduktion
 
-  return [...new Set(variants)];
+  return [...set].filter(Boolean);
 }
 
 /* ══════════════════════════════════════════
@@ -558,9 +650,43 @@ let recognition = null;
 let pauseTimer  = null;
 const PAUSE_LIMIT = 220;
 
+// iOS-webbläsare (även "Chrome" på iPhone) saknar röstigenkänning
+const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+              (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+
+function setBigText(text, vw) {
+  liveWord.textContent = text;
+  liveWord.style.fontSize = vw || "7vw";
+}
+
+// Visas om webbläsaren inte klarar röstigenkänning
+function showUnsupported() {
+  const sv = currentLang === "sv-SE";
+  if (isIOS) {
+    setBigText(sv
+      ? "iPhone och iPad kan tyvärr inte göra röstigenkänning i webbläsaren. Öppna länken på en Android-telefon eller en dator med Chrome."
+      : "iPhone and iPad can't do speech recognition in the browser. Open the link on an Android phone or a computer with Chrome.",
+      "5vw");
+  } else {
+    setBigText(sv
+      ? "Den här webbläsaren stöder inte röstigenkänning. Prova Chrome eller Edge."
+      : "This browser doesn't support speech recognition. Try Chrome or Edge.",
+      "5vw");
+  }
+}
+
+// Startar mikrofonen – MÅSTE ske efter ett tryck (krav på mobil)
+function startListening() {
+  if (!SpeechRecognition || isIOS) { showUnsupported(); return; }
+  started = true;
+  buildRecognition();
+  try { recognition.start(); } catch (e) {}
+  setBigText(currentLang === "sv-SE" ? "Lyssnar..." : "Listening...", "8vw");
+}
+
 function buildRecognition() {
   if (recognition) {
-    try { recognition.stop(); } catch(e) {}
+    try { recognition.onend = null; recognition.stop(); } catch(e) {}
   }
 
   recognition = new SpeechRecognition();
@@ -569,15 +695,26 @@ function buildRecognition() {
   recognition.interimResults = true;
 
   recognition.onresult = handleResult;
-  recognition.onend    = () => { try { recognition.start(); } catch(e) {} };
-  recognition.onerror  = (e) => { if (e.error !== "aborted") { setTimeout(restartRecognition, 500); } };
+  // Håll igång lyssningen (mobil-Chrome avslutar ofta av sig själv)
+  recognition.onend = () => { if (started) { try { recognition.start(); } catch(e) {} } };
+  recognition.onerror = (e) => {
+    if (e.error === "not-allowed" || e.error === "service-not-allowed") {
+      // Mikrofon nekad – sluta loopa och be användaren tillåta + trycka igen
+      started = false;
+      const sv = currentLang === "sv-SE";
+      setBigText(sv ? "Tillåt mikrofonen och tryck för att börja"
+                    : "Allow the microphone, then tap to start", "5vw");
+    } else if (e.error !== "aborted" && e.error !== "no-speech") {
+      if (started) setTimeout(restartRecognition, 500);
+    }
+  };
 }
 
 function restartRecognition() {
+  if (!started) return;
   buildRecognition();
   try { recognition.start(); } catch(e) {}
-  liveWord.textContent  = currentLang === "sv-SE" ? "Lyssnar..." : "Listening...";
-  liveWord.style.fontSize = "8vw";
+  setBigText(currentLang === "sv-SE" ? "Lyssnar..." : "Listening...", "8vw");
 }
 
 /* ══════════════════════════════════════════
@@ -592,30 +729,70 @@ function simplify(word) {
     .replace(/[^a-zåäö]/g,"");
 }
 
-function similarity(a, b) {
-  a = simplify(a); b = simplify(b);
-  if (a === b) return 1;
-  let matches = 0;
-  for (let i = 0; i < Math.min(a.length, b.length); i++) {
-    if (a[i] === b[i]) matches++;
+// Redigeringsavstånd (Levenshtein) – robust jämförelse
+function editDistance(a, b) {
+  const m = a.length, n = b.length;
+  if (!m) return n; if (!n) return m;
+  let prev = Array.from({ length: n + 1 }, (_, i) => i);
+  for (let i = 1; i <= m; i++) {
+    const cur = [i];
+    for (let j = 1; j <= n; j++) {
+      cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    }
+    prev = cur;
   }
-  return matches / Math.max(a.length, b.length);
+  return prev[n];
 }
 
-function findNameMatch(word) {
-  const w = word.toLowerCase();
+function similarity(a, b) {
+  a = simplify(a); b = simplify(b);
+  if (!a.length && !b.length) return 1;
+  if (!a.length || !b.length) return 0;
+  return 1 - editDistance(a, b) / Math.max(a.length, b.length);
+}
 
+function normPhrase(s) {
+  return (s || "").toLowerCase().replace(/[^a-zåäö]/g, "");
+}
+
+function findNameMatch(chunk) {
+  const w = normPhrase(chunk);
+  if (w.length < 2) return null;
+
+  // 1) Exakt mot inlärda uttal (från din röst) eller stavningsvarianter
   for (const n of names) {
-    // Exact match against any variant
-    if (n.variants.includes(w)) return n.display;
-    // Fuzzy match
-    for (const v of n.variants) {
-      if (Math.abs(w.length - v.length) <= 3 && similarity(w, v) > 0.70) {
-        return n.display;
-      }
+    if (n.learned.some(l => normPhrase(l) === w)) return n.display;
+    if (n.variants.some(v => normPhrase(v) === w)) return n.display;
+    if (normPhrase(n.display) === w) return n.display;
+  }
+
+  // 2) Konservativ luddig matchning (hög tröskel -> stör inte vanliga ord)
+  let best = null, bestScore = 0.82;
+  for (const n of names) {
+    for (const v of [...n.learned, ...n.variants, n.display]) {
+      const s = similarity(w, normPhrase(v));
+      if (s > bestScore) { bestScore = s; best = n.display; }
     }
   }
-  return null;
+  return best;
+}
+
+// Matcha namn även när röstmotorn delat upp det i flera ord ("de pack" -> "Deepak")
+function applyNames(words) {
+  const out = [];
+  let i = 0;
+  while (i < words.length) {
+    let matched = null, span = 1;
+    const maxSpan = Math.min(4, words.length - i);
+    for (let w = maxSpan; w >= 1; w--) {
+      const chunk = words.slice(i, i + w).join("");
+      const m = findNameMatch(chunk);
+      if (m) { matched = m; span = w; break; }
+    }
+    if (matched) { out.push(matched); i += span; }
+    else { out.push(words[i]); i++; }
+  }
+  return out;
 }
 
 /* ══════════════════════════════════════════
@@ -627,7 +804,7 @@ function normalizeWord(w) {
   w = w.toLowerCase().trim();
   if (FILLER_WORDS.has(w)) return null;
 
-  // Punctuation commands
+  // Skiljetecken-kommandon
   const punct = {
     "punkt":".", "frågetecken":"?", "komma":",",
     "utropstecken":"!", "ellips":"...",
@@ -635,10 +812,7 @@ function normalizeWord(w) {
   };
   if (punct[w]) return punct[w];
 
-  // Name match
-  const nameMatch = findNameMatch(w);
-  if (nameMatch) return nameMatch;
-
+  // Namn hanteras i applyNames (över flera ord) – inte här
   return w;
 }
 
@@ -652,6 +826,19 @@ function mergeLetters(words) {
    RESULT HANDLER
 ══════════════════════════════════════════ */
 function handleResult(event) {
+  // Inlärningsläge: fånga vad motorn hör i stället för att bygga meningar
+  if (learningName) {
+    for (let i = event.resultIndex; i < event.results.length; i++) {
+      const res = event.results[i];
+      if (res.isFinal) {
+        const t = res[0].transcript.trim();
+        if (t) learnCaptures.push(t);
+      }
+    }
+    showLearnStatus();
+    return;
+  }
+
   resetPauseTimer();
 
   for (let i = event.resultIndex; i < event.results.length; i++) {
@@ -662,27 +849,32 @@ function handleResult(event) {
     let words = transcript.split(" ").filter(Boolean);
     words = mergeLetters(words);
 
-    // Show last meaningful word live
-    const lastRaw  = words[words.length - 1];
-    const lastWord = normalizeWord(lastRaw) || lastRaw;
+    // Live: visa de sista ett–två orden som rullar fram (namn slås ihop)
+    const tail     = applyNames(words);
+    const liveText = tail.slice(-2).join(" ");   // upp till två sista orden
 
-    liveWord.textContent = lastWord;
+    liveWord.textContent = liveText;
 
-    const len = lastWord.length;
+    const len = liveText.length;
     let size;
-    if ([".", "?", "!", "..."].includes(lastWord)) size = "22vw";
-    else if (len <= 4)  size = "20vw";
-    else if (len <= 8)  size = "16vw";
-    else if (len <= 12) size = "12vw";
-    else                size = "9vw";
+    if ([".", "?", "!", "..."].includes(liveText)) size = "22vw";
+    else if (len <= 4)   size = "20vw";
+    else if (len <= 8)   size = "16vw";
+    else if (len <= 12)  size = "13vw";
+    else if (len <= 18)  size = "10vw";
+    else                 size = "8vw";
     liveWord.style.fontSize = size;
 
-    // Accumulate finals into sentence
+    // Bygg meningen när delen är klar
     if (result.isFinal) {
+      // Ta bort fillerord och översätt skiljetecken-kommandon först
+      let clean = [];
       words.forEach(w => {
-        const norm = normalizeWord(w);
-        if (norm) sentence.push(norm);
+        const n = normalizeWord(w);
+        if (n) clean.push(n);
       });
+      // Slå sedan ihop ev. namn som delats i flera ord
+      applyNames(clean).forEach(w => sentence.push(w));
     }
   }
 }
@@ -703,6 +895,9 @@ function handlePause() {
     .replace(/ \?/g,"?").replace(/ !/g,"!")
     .replace(/ \.\.\./g,"...");
 
+  // Automatisk punktuation (om inget röstkommando redan satt det)
+  text = autoPunctuate(text);
+
   // Capitalize first letter
   text = text.charAt(0).toUpperCase() + text.slice(1);
 
@@ -714,11 +909,45 @@ function handlePause() {
 }
 
 /* ══════════════════════════════════════════
+   AUTO-PUNKTUATION (heuristik)
+══════════════════════════════════════════ */
+// Ord som ofta inleder en fråga -> sätter frågetecken
+const SV_QUESTION = new Set([
+  "vad","vem","vems","vilken","vilket","vilka","var","vart","varifrån","varför",
+  "när","hur","hurdan","är","har","hade","kan","kunde","ska","skall","skulle",
+  "vill","ville","får","fick","gör","gjorde","kommer","blir","blev","finns",
+  "behöver","måste","tror","vet","heter","bor","orkar","törs","vågar","undrar"
+]);
+const EN_QUESTION = new Set([
+  "what","who","whom","whose","which","where","when","why","how",
+  "do","does","did","is","are","am","was","were","can","could","will",
+  "would","shall","should","may","might","must","have","has","had"
+]);
+
+function autoPunctuate(text) {
+  const t = text.trim();
+  if (!t) return t;
+  if (/[.?!…]$/.test(t)) return t;               // redan satt via röstkommando
+  const first = t.split(/\s+/)[0].toLowerCase().replace(/[^a-zåäöa-z']/g, "");
+  const set = (currentLang === "sv-SE") ? SV_QUESTION : EN_QUESTION;
+  return t + (set.has(first) ? "?" : ".");
+}
+
+/* ══════════════════════════════════════════
    INIT
 ══════════════════════════════════════════ */
+// Behåll inlärda uttal, uppdatera bara stavningsvarianterna
+names = names.map(n => ({ display: n.display, variants: generateVariants(n.display), learned: n.learned || [] }));
+saveNames();
+
 renderNames();
-buildRecognition();
-recognition.start();
+
+// Starta INTE automatiskt – mobilen kräver ett tryck. Visa rätt startläge.
+if (!SpeechRecognition || isIOS) {
+  showUnsupported();
+} else {
+  setBigText(currentLang === "sv-SE" ? "Tryck för att börja" : "Tap to start", "9vw");
+}
 </script>
 
 </body>
